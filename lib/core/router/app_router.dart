@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/onboarding/presentation/splash_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
@@ -21,10 +21,15 @@ import '../../features/cases/presentation/my_cases_screen.dart';
 import '../../features/cases/presentation/case_details_screen.dart';
 import '../../features/cases/presentation/client_case_ad_details_screen.dart';
 import '../../features/cases/presentation/edit_case_screen.dart';
+import '../../features/cases/presentation/consultation_details_screen.dart';
+import '../../features/cases/presentation/completed_cases_screen.dart';
+import '../../features/cases/presentation/active_case_workspace_screen.dart';
 import '../../features/cases/models/case_model.dart';
 import '../../features/chat/presentation/conversations_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/chat/presentation/ai_chat_screen.dart'; // ADDED: AI Chat Screen
+import '../../features/chat/models/chat_model.dart';
+import '../../features/chat/services/chat_service.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/profile/presentation/edit_profile_screen.dart';
 import '../../features/main/presentation/client_main_wrapper.dart';
@@ -32,6 +37,8 @@ import '../../features/lawyers/presentation/lawyer_search_screen.dart';
 import '../../features/lawyers/presentation/lawyer_profile_screen.dart'
     as client_lawyer;
 import '../../features/wallet/presentation/wallet_screen.dart';
+import '../../features/wallet/presentation/withdraw_page.dart';
+import '../../features/events/presentation/calendar_page.dart';
 import '../../features/booking/presentation/booking_screen.dart';
 import '../../features/booking/presentation/booking_summary_screen.dart';
 import '../../features/cases/presentation/create_case_screen.dart';
@@ -47,12 +54,19 @@ import '../../features/lawyer_profile/presentation/lawyer_profile_screen.dart';
 import '../../features/lawyer_profile/presentation/lawyer_bio_setup_screen.dart';
 import '../../features/lawyer_profile/presentation/lawyer_photo_upload_screen.dart';
 import '../../features/lawyer_profile/presentation/lawyer_edit_profile_screen.dart';
+import '../../features/lawyer_profile/presentation/lawyer_security_password_screen.dart';
+import '../../features/ads/presentation/create_lawyer_ad_screen.dart';
+import '../../features/ads/presentation/manage_lawyer_ads_screen.dart';
+import '../../features/ads/presentation/book_lawyer_ad_screen.dart';
+import '../../features/ads/presentation/setup_workspace_screen.dart';
 
 import '../../features/profile/presentation/saved_lawyers_screen.dart';
 import '../../features/profile/presentation/security_settings_screen.dart';
 import '../../features/profile/presentation/language_settings_screen.dart';
 import '../../features/profile/presentation/help_center_screen.dart';
 import '../../features/profile/presentation/terms_privacy_screen.dart';
+import '../../features/documents/presentation/document_review_screen.dart';
+import '../../features/articles/presentation/legal_articles_screen.dart';
 import '../services/auth_service.dart'; // Import AuthService
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
 
@@ -117,12 +131,14 @@ final GoRouter appRouter = GoRouter(
         if (verificationStatus == 'profile_pending' ||
             verificationStatus == 'none') {
           // New flow: Profile first
-          if (state.uri.path != '/client-profile-setup')
+          if (state.uri.path != '/client-profile-setup') {
             return '/client-profile-setup';
+          }
         } else if (verificationStatus == 'docs_pending') {
           // Then Docs
-          if (state.uri.path != '/client-verification')
+          if (state.uri.path != '/client-verification') {
             return '/client-verification';
+          }
         } else if (verificationStatus == 'pending' ||
             verificationStatus == 'verified') {
           // Allow access
@@ -145,20 +161,24 @@ final GoRouter appRouter = GoRouter(
 
         if (verificationStatus == 'pending_submission') {
           // Go to Profile Setup
-          if (state.uri.path != '/lawyer-profile-setup')
+          if (state.uri.path != '/lawyer-profile-setup') {
             return '/lawyer-profile-setup';
+          }
         } else if (verificationStatus == 'pending_docs') {
           // Go to Document Verification
-          if (state.uri.path != '/lawyer-verification')
+          if (state.uri.path != '/lawyer-verification') {
             return '/lawyer-verification';
+          }
         } else if (verificationStatus == 'pending_approval') {
           // Go to Under Review
-          if (state.uri.path != '/verification-pending')
+          if (state.uri.path != '/verification-pending') {
             return '/verification-pending';
+          }
         } else if (verificationStatus == 'rejected') {
           // Go to Rejected
-          if (state.uri.path != '/verification-rejected')
+          if (state.uri.path != '/verification-rejected') {
             return '/verification-rejected';
+          }
         } else if (verificationStatus == 'approved') {
           // Go to Dashboard or Public Profile Setup
           final publicProfileCompleted =
@@ -325,7 +345,10 @@ final GoRouter appRouter = GoRouter(
       path: '/job-details/:jobId',
       name: 'job-details',
       builder: (context, state) {
-        final job = state.extra as JobOpportunity;
+        final job = state.extra;
+        if (job is! JobOpportunity) {
+          return const JobBoardScreen();
+        }
         return JobDetailsScreen(job: job);
       },
     ),
@@ -368,6 +391,18 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const WalletScreen(),
     ),
 
+    GoRoute(
+      path: '/withdraw',
+      name: 'withdraw',
+      builder: (context, state) => const WithdrawPage(),
+    ),
+
+    GoRoute(
+      path: '/calendar',
+      name: 'calendar',
+      builder: (context, state) => const CalendarPage(),
+    ),
+
     // Booking Screen
     GoRoute(
       path: '/booking/:lawyerId',
@@ -383,7 +418,11 @@ final GoRouter appRouter = GoRouter(
       path: '/booking-summary',
       name: 'booking-summary',
       builder: (context, state) {
-        final bookingData = state.extra as Map<String, dynamic>;
+        final extra = state.extra;
+        if (extra == null || extra is! Map<String, dynamic>) {
+          return const LawyerSearchScreen();
+        }
+        final bookingData = Map<String, dynamic>.from(extra);
         // Add lawyer name to booking data
         final lawyerId = bookingData['lawyerId'] as String;
         final lawyer = LawyerMockData.getLawyerById(lawyerId);
@@ -400,16 +439,88 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const CreateCaseScreen(),
     ),
 
+    // Document Review Screen
+    GoRoute(
+      path: '/document-review',
+      name: 'document-review',
+      builder: (context, state) => const DocumentReviewScreen(),
+    ),
+    
+    // My Documents Screen
+
+    // Legal Articles Screen
+    GoRoute(
+      path: '/legal-articles',
+      name: 'legal-articles',
+      builder: (context, state) => const LegalArticlesScreen(),
+    ),
+
     // Chat Screen
     GoRoute(
       path: '/chat/:conversationId',
       name: 'chat',
       builder: (context, state) {
         final conversationId = state.pathParameters['conversationId']!;
-        final lawyerData = state.extra as Map<String, dynamic>;
+        final extra = state.extra;
+        
+        if (extra == null || extra is! Map<String, dynamic>) {
+          // If extra is missing (e.g. from notification or browser refresh),
+          // fallback to conversation list instead of crashing
+          return const ConversationsScreen();
+        }
+        
         return ChatScreen(
           conversationId: conversationId,
-          lawyerData: lawyerData,
+          lawyerData: extra,
+        );
+      },
+    ),
+
+    // Direct Chat Route (Find or Create by IDs)
+    GoRoute(
+      path: '/chat/direct/:partnerId',
+      name: 'chat-direct',
+      builder: (context, state) {
+        final partnerId = state.pathParameters['partnerId']!;
+        final extra = state.extra as Map<String, dynamic>?;
+
+        return FutureBuilder<ChatModel>(
+          future: ChatService().getOrCreateChat(
+            clientId: extra?['clientId'] ?? '',
+            lawyerId: extra?['lawyerId'] ?? partnerId,
+            clientName: extra?['clientName'] ?? 'Client',
+            lawyerName: extra?['lawyerName'] ?? 'Lawyer',
+            clientAvatar: extra?['clientAvatar'],
+            lawyerAvatar: extra?['lawyerAvatar'],
+          ),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError || !snapshot.hasData) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('Chat')),
+                body: Center(
+                    child: Text('Error starting chat: ${snapshot.error}')),
+              );
+            }
+
+            final chat = snapshot.data!;
+            return ChatScreen(
+              conversationId: chat.id,
+              lawyerData: {
+                'lawyerId': chat.lawyerId,
+                'lawyerName': chat.lawyerName,
+                'lawyerAvatar': chat.lawyerAvatar,
+                'clientId': chat.clientId,
+                'clientName': chat.clientName,
+                'clientAvatar': chat.clientAvatar,
+                'isOnline': true,
+              },
+            );
+          },
         );
       },
     ),
@@ -444,13 +555,28 @@ final GoRouter appRouter = GoRouter(
       },
     ),
 
+    // Consultation Details Screen
+    GoRoute(
+      path: '/consultation-details/:caseId/:consultationId',
+      name: 'consultation-details',
+      builder: (context, state) {
+        final caseId = state.pathParameters['caseId']!;
+        final consultationId = state.pathParameters['consultationId']!;
+        return ConsultationDetailsScreen(
+          caseId: caseId,
+          consultationId: consultationId,
+        );
+      },
+    ),
+
     // Client Case Ad Details Screen
     GoRoute(
       path: '/case-ad-details',
       name: 'case-ad-details',
       builder: (context, state) {
-        final caseModel = state.extra as CaseModel;
-        return ClientCaseAdDetailsScreen(caseModel: caseModel);
+        final extra = state.extra;
+        if (extra is! CaseModel) return const MyCasesScreen();
+        return ClientCaseAdDetailsScreen(caseModel: extra);
       },
     ),
 
@@ -459,8 +585,9 @@ final GoRouter appRouter = GoRouter(
       path: '/edit-case',
       name: 'edit-case',
       builder: (context, state) {
-        final caseModel = state.extra as CaseModel;
-        return EditCaseScreen(caseModel: caseModel);
+        final extra = state.extra;
+        if (extra is! CaseModel) return const MyCasesScreen();
+        return EditCaseScreen(caseModel: extra);
       },
     ),
 
@@ -469,6 +596,107 @@ final GoRouter appRouter = GoRouter(
       path: '/notifications',
       name: 'notifications',
       builder: (context, state) => const NotificationsScreen(),
+    ),
+    GoRoute(
+      path: '/completed-cases',
+      name: 'completed-cases',
+      builder: (context, state) => const CompletedCasesScreen(),
+    ),
+    GoRoute(
+      path: '/lawyer-create-ad',
+      name: 'lawyer-create-ad',
+      builder: (context, state) => const CreateLawyerAdScreen(),
+    ),
+    GoRoute(
+      path: '/lawyer-edit-ad/:adId',
+      name: 'lawyer-edit-ad',
+      builder: (context, state) {
+        final adId = state.pathParameters['adId'] ?? '';
+        return CreateLawyerAdScreen(adId: adId);
+      },
+    ),
+    GoRoute(
+      path: '/lawyer-manage-ads',
+      name: 'lawyer-manage-ads',
+      builder: (context, state) => const ManageLawyerAdsScreen(),
+    ),
+    GoRoute(
+      path: '/book-lawyer-ad/:adId',
+      name: 'book-lawyer-ad',
+      builder: (context, state) {
+        final adId = state.pathParameters['adId'] ?? '';
+        return BookLawyerAdScreen(adId: adId);
+      },
+    ),
+    GoRoute(
+      path: '/setup-workspace/:bookingId',
+      name: 'setup-workspace',
+      builder: (context, state) {
+        final bookingId = state.pathParameters['bookingId'] ?? '';
+        final extra = state.extra;
+        final formData = extra is Map<String, dynamic> ? extra : null;
+        return SetupWorkspaceScreen(
+          bookingId: bookingId,
+          formData: formData,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/case-workspace',
+      name: 'case-workspace',
+      builder: (context, state) {
+        final extra = state.extra;
+        if (extra is Map<String, dynamic> &&
+            extra['caseModel'] is CaseModel &&
+            extra['isClient'] is bool) {
+          return ActiveCaseWorkspaceScreen(
+            caseModel: extra['caseModel'] as CaseModel,
+            isClient: extra['isClient'] as bool,
+          );
+        }
+
+        final caseId = state.uri.queryParameters['caseId'];
+        final isClientRaw = state.uri.queryParameters['isClient'];
+        final isClient = isClientRaw == 'true';
+        final tab = state.uri.queryParameters['tab'];
+        final initialTabIndex = tab == 'events'
+          ? 3
+          : tab == 'milestones'
+            ? 4
+            : tab == 'invoices'
+              ? 5
+              : tab == 'consultations'
+                ? 1
+                : tab == 'files'
+                  ? 2
+                  : 0;
+
+        if (caseId == null || caseId.isEmpty) {
+          return _WorkspaceRedirectFallback(isClient: isClient);
+        }
+
+        return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          future: FirebaseFirestore.instance.collection('cases').doc(caseId).get(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            final doc = snapshot.data;
+            if (doc == null || !doc.exists || doc.data() == null) {
+              return _WorkspaceRedirectFallback(isClient: isClient);
+            }
+
+            return ActiveCaseWorkspaceScreen(
+              caseModel: CaseModel.fromMap(doc.data()!, doc.id),
+              isClient: isClient,
+              initialTabIndex: initialTabIndex,
+            );
+          },
+        );
+      },
     ),
 
     // Saved Lawyers Screen
@@ -494,6 +722,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/terms',
       builder: (context, state) => const TermsPrivacyScreen(),
+    ),
+    GoRoute(
+      path: '/lawyer-security-password',
+      builder: (context, state) => const LawyerSecurityPasswordScreen(),
     ),
 
     // Lawyer Main Shell with Bottom Navigation
@@ -526,6 +758,15 @@ final GoRouter appRouter = GoRouter(
               path: '/lawyer-job-board',
               name: 'lawyer-job-board',
               builder: (context, state) => const JobBoardScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/lawyer-messages',
+              name: 'lawyer-messages',
+              builder: (context, state) => const ConversationsScreen(),
             ),
           ],
         ),
@@ -617,5 +858,33 @@ class GoRouterRefreshStream extends ChangeNotifier {
   void dispose() {
     _subscription.cancel();
     super.dispose();
+  }
+}
+
+class _WorkspaceRedirectFallback extends StatefulWidget {
+  final bool isClient;
+
+  const _WorkspaceRedirectFallback({required this.isClient});
+
+  @override
+  State<_WorkspaceRedirectFallback> createState() =>
+      _WorkspaceRedirectFallbackState();
+}
+
+class _WorkspaceRedirectFallbackState extends State<_WorkspaceRedirectFallback> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go(widget.isClient ? '/client-cases' : '/lawyer-cases');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
+    );
   }
 }

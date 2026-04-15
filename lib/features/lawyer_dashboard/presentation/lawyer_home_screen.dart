@@ -7,7 +7,15 @@ import '../../../core/services/auth_service.dart';
 import '../data/lawyer_dashboard_mock_data.dart';
 import '../../jobs/data/job_mock_data.dart';
 import '../../jobs/presentation/widgets/job_opportunity_card.dart';
-
+import '../../ads/models/lawyer_ad_model.dart';
+import '../../ads/services/lawyer_ad_service.dart';
+import '../../events/models/event_model.dart';
+import '../../events/services/event_service.dart';
+import '../../notifications/services/notification_service.dart';
+import '../../jobs/models/job_opportunity.dart';
+import '../../cases/models/case_model.dart';
+import '../../cases/services/case_service.dart';
+import 'package:intl/intl.dart';
 /// Lawyer Home Screen (Dashboard)
 class LawyerHomeScreen extends StatelessWidget {
   const LawyerHomeScreen({super.key});
@@ -15,8 +23,9 @@ class LawyerHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final leads = LawyerDashboardMockData.leads;
-    final ads = LawyerDashboardMockData.activeAds;
+    final caseService = CaseService();
+    final notificationService = NotificationService();
+    final lawyerAdService = LawyerAdService();
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
       stream: AuthService().getUserStream(),
@@ -123,19 +132,84 @@ class LawyerHomeScreen extends StatelessWidget {
                   ],
                 ),
                 actions: [
-                  Container(
-                    margin: const EdgeInsets.only(right: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      onPressed: () {},
-                      icon: PhosphorIcon(
-                        PhosphorIconsRegular.bell,
-                        color: AppColors.textOnPrimary,
-                      ),
-                    ),
+                  Builder(
+                    builder: (context) {
+                      final currentUser = AuthService().currentUser;
+                      if (currentUser == null) {
+                        return Container(
+                          margin: const EdgeInsets.only(right: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: IconButton(
+                            onPressed: () => context.push('/notifications'),
+                            icon: PhosphorIcon(
+                              PhosphorIconsRegular.bell,
+                              color: AppColors.textOnPrimary,
+                            ),
+                          ),
+                        );
+                      }
+
+                      return StreamBuilder<int>(
+                        stream: notificationService.streamUnreadCount(
+                          currentUser.uid,
+                        ),
+                        builder: (context, unreadSnapshot) {
+                      final unreadCount = unreadSnapshot.data ?? 0;
+                      return Container(
+                        margin: const EdgeInsets.only(right: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Stack(
+                          children: [
+                            IconButton(
+                              onPressed: () => context.push('/notifications'),
+                              icon: PhosphorIcon(
+                                PhosphorIconsRegular.bell,
+                                color: AppColors.textOnPrimary,
+                              ),
+                            ),
+                            if (unreadCount > 0)
+                              Positioned(
+                                right: 4,
+                                top: 4,
+                                child: Container(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 16,
+                                    minHeight: 16,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 1,
+                                  ),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.error,
+                                    borderRadius:
+                                        BorderRadius.all(Radius.circular(10)),
+                                  ),
+                                  child: Text(
+                                    unreadCount > 99
+                                        ? '99+'
+                                        : unreadCount.toString(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                        },
+                      );
+                    },
                   ),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
@@ -277,16 +351,19 @@ class LawyerHomeScreen extends StatelessWidget {
                             label: 'Post Ad',
                             icon: PhosphorIconsRegular.megaphone,
                             color: AppColors.info,
+                            onTap: () => context.push('/lawyer-create-ad'),
                           ),
                           _QuickAction(
                             label: 'Withdraw',
                             icon: PhosphorIconsRegular.bank,
                             color: AppColors.success,
+                            onTap: () => context.push('/withdraw'),
                           ),
                           _QuickAction(
                             label: 'Calendar',
                             icon: PhosphorIconsRegular.calendar,
                             color: AppColors.warning,
+                            onTap: () => context.push('/calendar'),
                           ),
                           _QuickAction(
                             label: 'Analytics',
@@ -319,114 +396,91 @@ class LawyerHomeScreen extends StatelessWidget {
                             ),
                           ),
                           TextButton(
-                            onPressed: () => context.go(
-                                '/lawyer-job-board'), // Ideally to manage ads page
+                            onPressed: () => context.push('/lawyer-manage-ads'),
                             child: const Text('View All'),
                           ),
                         ],
                       ),
                     ),
-                    SizedBox(
-                      height: 160,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.lg),
-                        scrollDirection: Axis.horizontal,
-                        itemCount: ads.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(width: AppSpacing.md),
-                        itemBuilder: (context, index) =>
-                            _AdPerformanceCard(ad: ads[index]),
-                      ),
+                    StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+                      stream: AuthService().getUserStream(),
+                      builder: (context, userSnapshot) {
+                        final lawyerId = userSnapshot.data?.id;
+                        if (lawyerId == null) {
+                          return const Padding(
+                            padding: EdgeInsets.all(AppSpacing.lg),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+
+                        return StreamBuilder<List<LawyerAdModel>>(
+                          stream: lawyerAdService.streamMyAds(lawyerId),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const SizedBox(
+                                height: 140,
+                                child: Center(child: CircularProgressIndicator()),
+                              );
+                            }
+
+                            final ads = snapshot.data ?? [];
+                            if (ads.isEmpty) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.lg,
+                                  vertical: AppSpacing.sm,
+                                ),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(AppSpacing.md),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(AppRadius.md),
+                                    border: Border.all(color: AppColors.grey200),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'No active ads yet',
+                                        style: textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      const Text(
+                                        'Create your first ad from Quick Actions to appear in client search.',
+                                        style: TextStyle(color: AppColors.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return SizedBox(
+                              height: 160,
+                              child: ListView.separated(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.lg,
+                                ),
+                                scrollDirection: Axis.horizontal,
+                                itemCount: ads.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(width: AppSpacing.md),
+                                itemBuilder: (context, index) =>
+                                    _LawyerAdPerformanceCard(ad: ads[index]),
+                              ),
+                            );
+                          },
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
 
               const SliverGap(AppSpacing.lg),
-
-              // Agenda Section
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Today's Agenda",
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(AppRadius.lg),
-                          border: Border.all(color: AppColors.grey200),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppColors.secondary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.gavel,
-                                  color: AppColors.secondary),
-                            ),
-                            const SizedBox(width: AppSpacing.md),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Hearing: Case #204',
-                                    style: textTheme.titleSmall
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'High Court, Courtroom 4',
-                                    style: textTheme.bodySmall?.copyWith(
-                                        color: AppColors.textSecondary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text(
-                                '10:00 AM',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
 
               const SliverGap(AppSpacing.xl),
 
@@ -455,21 +509,227 @@ class LawyerHomeScreen extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      ...leads.take(3).map((lead) {
-                        // Show top 3 matches
-                        final job = JobMockData.getById(lead.jobId);
-                        if (job == null) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                          child: JobOpportunityCard(
-                              job: job), // Reuse the improved card
-                        );
-                      }),
+                      StreamBuilder<List<CaseModel>>(
+                        stream: caseService.getOpenCases(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: Padding(
+                              padding: EdgeInsets.all(AppSpacing.lg),
+                              child: CircularProgressIndicator(),
+                            ));
+                          }
+                          
+                          final jobs = (snapshot.data ?? [])
+                            .map((c) => JobOpportunity.fromCaseModel(c))
+                            .toList();
+
+                          if (jobs.isEmpty) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                              child: Center(
+                                child: Text('No job matches found right now.',
+                                  style: TextStyle(color: AppColors.textSecondary),
+                                ),
+                              ),
+                            );
+                          }
+
+                          return Column(
+                            children: jobs.take(10).map((job) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                                child: JobOpportunityCard(job: job),
+                              );
+                            }).toList(),
+                          );
+                        },
+                      ),
                       const SizedBox(height: AppSpacing.xl),
                     ],
                   ),
                 ),
               ),
+
+              const SliverGap(AppSpacing.lg),
+
+              // Agenda Section (Upcoming Events)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Today's Agenda",
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+                        stream: AuthService().getUserStream(),
+                        builder: (context, userSnapshot) {
+                          final userId = userSnapshot.data?.id;
+                          if (userId == null) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          
+                          return StreamBuilder<EventModel?>(
+                            stream: EventService().getNextUpcomingEvent(userId),
+                            builder: (context, eventSnapshot) {
+                              if (eventSnapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(child: Padding(
+                                  padding: EdgeInsets.all(20.0),
+                                  child: CircularProgressIndicator(),
+                                ));
+                              }
+                              
+                              final event = eventSnapshot.data;
+                              
+                              if (event == null) {
+                                // Fallback UI
+                                return Container(
+                                  padding: const EdgeInsets.all(AppSpacing.md),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                                    border: Border.all(color: AppColors.grey200),
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                                    ],
+                                  ),
+                                  child: const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child: Text("Your agenda is clear for today.", style: TextStyle(color: AppColors.textSecondary)),
+                                    ),
+                                  ),
+                                );
+                              }
+                              
+                              final dateFormat = DateFormat('MMM d, h:mm a');
+                                final eventKind = event.type == 'consultation'
+                                  ? 'Consultation'
+                                  : event.type == 'hearing'
+                                    ? 'Hearing'
+                                    : 'Workspace Event';
+                                final eventLocation = (event.location != null && event.location!.isNotEmpty)
+                                  ? event.location!
+                                  : event.subtitle;
+                                final caseId = _resolveEventCaseId(event);
+                              
+                              return Container(
+                                padding: const EdgeInsets.all(AppSpacing.md),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                                  border: Border.all(color: AppColors.grey200),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.secondary.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(
+                                            event.type == 'consultation'
+                                                ? PhosphorIconsRegular.users
+                                                : PhosphorIconsRegular.gavel,
+                                            color: AppColors.secondary,
+                                          ),
+                                        ),
+                                        const SizedBox(width: AppSpacing.md),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                event.title,
+                                                style: textTheme.titleSmall
+                                                    ?.copyWith(fontWeight: FontWeight.bold),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                eventLocation,
+                                                style: textTheme.bodySmall?.copyWith(
+                                                    color: AppColors.textSecondary),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                dateFormat.format(event.scheduledAt),
+                                                style: textTheme.bodySmall?.copyWith(
+                                                    color: AppColors.textLight),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            eventKind,
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton(
+                                        onPressed: caseId == null
+                                            ? null
+                                            : () => context.push(
+                                                  '/case-workspace?caseId=$caseId&isClient=false&tab=events',
+                                                ),
+                                        child: const Text('Open Workspace Event'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                          );
+                        }
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SliverGap(AppSpacing.xl),
+
+              const SliverGap(AppSpacing.xl),
+
+              // (Agenda was moved up from here... wait, no, it was originally up there and Jobs was here.)
+              // The replacement chunk 1 covered both the Agenda and Jobs blocks, swapping their physical order!
             ],
           ),
         );
@@ -478,59 +738,77 @@ class LawyerHomeScreen extends StatelessWidget {
   }
 }
 
+String? _resolveEventCaseId(EventModel event) {
+  if (event.caseId != null && event.caseId!.isNotEmpty) {
+    return event.caseId;
+  }
+
+  if (event.referenceId.isNotEmpty && event.type == 'case_event') {
+    return event.referenceId;
+  }
+
+  final match = RegExp(r'Case #([A-Za-z0-9_-]+)').firstMatch(event.subtitle);
+  return match?.group(1);
+}
+
 class _QuickAction extends StatelessWidget {
   final String label;
   final PhosphorIconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   const _QuickAction({
     required this.label,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Center(
-            child: PhosphorIcon(
-              icon,
-              color: color,
-              size: 26,
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Center(
+              child: PhosphorIcon(
+                icon,
+                color: color,
+                size: 26,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _AdPerformanceCard extends StatelessWidget {
-  final ActiveAd ad;
+class _LawyerAdPerformanceCard extends StatelessWidget {
+  final LawyerAdModel ad;
 
-  const _AdPerformanceCard({required this.ad});
+  const _LawyerAdPerformanceCard({required this.ad});
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final isActive = ad.status == 'Active';
+    final isActive = ad.isActive;
 
     return Container(
       width: 260,
@@ -561,7 +839,7 @@ class _AdPerformanceCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  ad.status,
+                  isActive ? 'Active' : 'Paused',
                   style: TextStyle(
                     fontSize: 10,
                     color: isActive ? AppColors.success : Colors.white,
@@ -569,28 +847,62 @@ class _AdPerformanceCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(Icons.more_horiz,
-                  color: Colors.white.withOpacity(0.5), size: 18),
+              PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                icon: Icon(Icons.more_horiz,
+                    color: Colors.white.withValues(alpha: 0.5), size: 18),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'edit':
+                      context.push('/lawyer-edit-ad/${ad.id}');
+                      break;
+                    case 'toggle':
+                      // Logic to toggle active status
+                      break;
+                    case 'delete':
+                      // Logic to delete ad
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit Ad')),
+                  PopupMenuItem(
+                      value: 'toggle',
+                      child: Text(ad.isActive ? 'Pause Ad' : 'Resume Ad')),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete Ad', style: TextStyle(color: Colors.red)),
+                  ),
+                ],
+              ),
             ],
           ),
           const Spacer(),
           Text(
             ad.title,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: textTheme.titleMedium?.copyWith(
+            style: textTheme.titleSmall?.copyWith(
               color: Colors.white,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            ad.category,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 11,
             ),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
               _StatBadge(
-                  icon: Icons.visibility, value: ad.views, label: 'Views'),
-              const SizedBox(width: 12),
-              _StatBadge(
-                  icon: Icons.touch_app, value: ad.clicks, label: 'Clicks'),
+                  icon: Icons.shopping_bag_outlined,
+                  value: ad.bookings.toString(),
+                  label: 'Bookings'),
             ],
           ),
         ],

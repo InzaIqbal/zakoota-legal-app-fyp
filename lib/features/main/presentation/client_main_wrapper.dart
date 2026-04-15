@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/auth_service.dart';
+import '../../notifications/services/notification_service.dart';
 
 /// Main wrapper for client screens with bottom navigation bar
 class ClientMainWrapper extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
+  static final NotificationService _notificationService = NotificationService();
+  static final AuthService _authService = AuthService();
 
   const ClientMainWrapper({
     super.key,
@@ -73,9 +77,10 @@ class ClientMainWrapper extends StatelessWidget {
               label: 'My Cases',
             ),
             BottomNavigationBarItem(
-              icon: PhosphorIcon(
-                PhosphorIconsRegular.chatCircleText,
-                size: 24,
+              icon: _buildBadgeIcon(
+                regularIcon: PhosphorIconsRegular.chatCircleText,
+                fillIcon: PhosphorIconsFill.chatCircleText,
+                isActive: navigationShell.currentIndex == 2,
               ),
               activeIcon: PhosphorIcon(
                 PhosphorIconsFill.chatCircleText,
@@ -97,6 +102,53 @@ class ClientMainWrapper extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBadgeIcon({
+    required PhosphorIconData regularIcon,
+    required PhosphorIconData fillIcon,
+    required bool isActive,
+  }) {
+    final user = _authService.currentUser;
+    if (user == null) {
+      return PhosphorIcon(isActive ? fillIcon : regularIcon, size: 24);
+    }
+
+    return StreamBuilder<int>(
+      stream: _notificationService.streamUnreadCount(user.uid),
+      builder: (context, snapshot) {
+        final unreadCount = snapshot.data ?? 0;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            PhosphorIcon(isActive ? fillIcon : regularIcon, size: 24),
+            if (unreadCount > 0)
+              Positioned(
+                right: -4,
+                top: -2,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: const BoxDecoration(
+                    color: AppColors.error,
+                    shape: BoxShape.rectangle,
+                    borderRadius: BorderRadius.all(Radius.circular(10)),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

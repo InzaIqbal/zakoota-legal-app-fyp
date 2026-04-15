@@ -23,7 +23,7 @@ class LawyerDashboardScreen extends StatelessWidget {
               Icon(
                 Icons.dashboard_outlined,
                 size: 64,
-                color: AppColors.primary.withOpacity(0.8),
+                color: AppColors.primary.withValues(alpha: 0.8),
               ),
               const SizedBox(height: AppSpacing.lg),
               Text(

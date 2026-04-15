@@ -7,6 +7,12 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../cases/models/case_model.dart';
 import '../../cases/services/case_service.dart';
+import '../../jobs/models/proposal.dart';
+import '../../jobs/services/proposal_service.dart';
+import 'widgets/client_proposal_card.dart';
+import 'active_case_workspace_screen.dart';
+import '../../chat/services/chat_service.dart';
+import '../../../core/services/auth_service.dart';
 
 class ClientCaseAdDetailsScreen extends StatefulWidget {
   final CaseModel caseModel;
@@ -32,235 +38,507 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Text('Ad Management'),
-        actions: [
-          // Edit Button (FAB alternative in AppBar)
-          TextButton.icon(
-            onPressed: () {
-              context.push('/edit-case', extra: widget.caseModel);
-            },
-            icon: PhosphorIcon(PhosphorIconsRegular.pencilSimple, size: 20),
-            label: const Text('Edit'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.primary,
-            ),
+    // If case is active (proposal accepted) or completed, show the Workspace instead of Ad Manager
+    if (widget.caseModel.status == 'active' || widget.caseModel.status == 'closed') {
+      return ActiveCaseWorkspaceScreen(
+        caseModel: widget.caseModel,
+        isClient: true,
+      );
+    }
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          title: const Text('Case Management'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Details'),
+              Tab(text: 'Proposals'),
+            ],
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorColor: AppColors.primary,
           ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 1. Status & Toggle Card
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: _isAdVisible
-                          ? Colors.black.withOpacity(0.1)
-                          : AppColors.grey300.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                    ),
-                    child: PhosphorIcon(
-                      _isAdVisible
-                          ? PhosphorIconsRegular.checkCircle
-                          : PhosphorIconsRegular.pauseCircle,
-                      color:
-                          _isAdVisible ? Colors.black : AppColors.textSecondary,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _isAdVisible ? 'Ad is Active' : 'Ad is Paused',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: _isAdVisible
-                                        ? Colors.black
-                                        : AppColors.textSecondary,
-                                  ),
-                        ),
-                        Text(
-                          _isAdVisible
-                              ? 'Lawyers can find and view your case.'
-                              : 'Your case is hidden from the job board.',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.textSecondary,
-                                  ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: _isAdVisible,
-                    activeColor: Colors.black,
-                    activeTrackColor: Colors.grey.withOpacity(0.3),
-                    inactiveThumbColor: Colors.white,
-                    inactiveTrackColor: Colors.black.withOpacity(0.1),
-                    onChanged: (value) async {
-                      setState(() {
-                        _isAdVisible = value;
-                      });
-                      try {
-                        await CaseService()
-                            .toggleAdVisibility(widget.caseModel.caseId, value);
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error: $e')),
-                          );
-                          setState(() => _isAdVisible = !value); // Revert
-                        }
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-
-            // 2. Analytics Grid
-            Text(
-              'Performance Analytics',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                _AnalyticsCard(
-                  label: 'Views',
-                  value: widget.caseModel.viewsCount.toString(),
-                  icon: PhosphorIconsRegular.eye,
-                  color: Colors.blue,
-                ),
-                const SizedBox(width: AppSpacing.md),
-                _AnalyticsCard(
-                  label: 'Proposals',
-                  value: widget.caseModel.proposalCount.toString(),
-                  icon: PhosphorIconsRegular.paperPlaneRight,
-                  color: Colors.orange,
-                ),
-                const SizedBox(width: AppSpacing.md),
-                _AnalyticsCard(
-                  label: 'Saves',
-                  value: widget.caseModel.savesCount.toString(),
-                  icon: PhosphorIconsRegular.bookmarkSimple,
-                  color: Colors.purple,
-                ),
-              ],
-            ),
-            // Insight Tip
-            if (widget.caseModel.viewsCount > 10 &&
-                widget.caseModel.proposalCount == 0)
-              Container(
-                margin: const EdgeInsets.only(top: AppSpacing.md),
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: Border.all(color: Colors.amber.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    PhosphorIcon(PhosphorIconsRegular.lightbulb,
-                        color: Colors.amber[800]),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        "Many lawyers are viewing your case but not applying. Consider increasing your budget range to attract more proposals.",
-                        style:
-                            TextStyle(color: Colors.amber[900], fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            const SizedBox(height: AppSpacing.xl),
-
-            // 3. Document Management
-            _buildDocumentSection(context),
-
-            const SizedBox(height: AppSpacing.xl),
-
-            // 4. Case Details Preview
-            Text(
-              'Case Details',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.grey200),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DetailRow(label: 'Title', value: widget.caseModel.title),
-                  const Divider(height: 24),
-                  _DetailRow(
-                      label: 'Budget',
-                      value:
-                          'PKR ${widget.caseModel.budgetMin.toInt()} - ${widget.caseModel.budgetMax.toInt()}'),
-                  const Divider(height: 24),
-                  _DetailRow(label: 'Location', value: widget.caseModel.city),
-                  const Divider(height: 24),
-                  Text(
-                    'Description',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.caseModel.description,
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      height: 1.5,
-                    ),
-                  ),
-                ],
+          actions: [
+            // Edit Button (FAB alternative in AppBar)
+            TextButton.icon(
+              onPressed: () {
+                context.push('/edit-case', extra: widget.caseModel);
+              },
+              icon: const PhosphorIcon(PhosphorIconsRegular.pencilSimple,
+                  size: 20),
+              label: const Text('Edit'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
               ),
             ),
           ],
         ),
+        body: TabBarView(
+          children: [
+            // Tab 1: Case Details
+            _buildDetailsTab(context),
+            // Tab 2: Proposals List
+            _buildProposalsTab(context),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildDetailsTab(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1. Status & Toggle Card
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: _isAdVisible
+                        ? Colors.black.withValues(alpha: 0.1)
+                        : AppColors.grey300.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: PhosphorIcon(
+                    _isAdVisible
+                        ? PhosphorIconsRegular.checkCircle
+                        : PhosphorIconsRegular.pauseCircle,
+                    color:
+                        _isAdVisible ? Colors.black : AppColors.textSecondary,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isAdVisible ? 'Ad is Active' : 'Ad is Paused',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: _isAdVisible
+                                      ? Colors.black
+                                      : AppColors.textSecondary,
+                                ),
+                      ),
+                      Text(
+                        _isAdVisible
+                            ? 'Lawyers can find and view your case.'
+                            : 'Your case is hidden from the job board.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _isAdVisible,
+                  activeThumbColor: Colors.black,
+                  activeTrackColor: Colors.grey.withValues(alpha: 0.3),
+                  inactiveThumbColor: Colors.white,
+                  inactiveTrackColor: Colors.black.withValues(alpha: 0.1),
+                  onChanged: (value) async {
+                    setState(() {
+                      _isAdVisible = value;
+                    });
+                    try {
+                      await CaseService()
+                          .toggleAdVisibility(widget.caseModel.caseId, value);
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: $e')),
+                      );
+                      setState(() => _isAdVisible = !value); // Revert
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+
+          // 2. Analytics Grid
+          Text(
+            'Performance Analytics',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              _AnalyticsCard(
+                label: 'Views',
+                value: widget.caseModel.viewsCount.toString(),
+                icon: PhosphorIconsRegular.eye,
+                color: Colors.blue,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              _AnalyticsCard(
+                label: 'Proposals',
+                value: widget.caseModel.proposalCount.toString(),
+                icon: PhosphorIconsRegular.paperPlaneRight,
+                color: Colors.orange,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              _AnalyticsCard(
+                label: 'Saves',
+                value: widget.caseModel.savesCount.toString(),
+                icon: PhosphorIconsRegular.bookmarkSimple,
+                color: Colors.purple,
+              ),
+            ],
+          ),
+          // Insight Tip
+          if (widget.caseModel.viewsCount > 10 &&
+              widget.caseModel.proposalCount == 0)
+            Container(
+              margin: const EdgeInsets.only(top: AppSpacing.md),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  PhosphorIcon(PhosphorIconsRegular.lightbulb,
+                      color: Colors.amber[800]),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      "Many lawyers are viewing your case but not applying. Consider increasing your budget range to attract more proposals.",
+                      style: TextStyle(color: Colors.amber[900], fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: AppSpacing.xl),
+
+          // 3. Document Management
+          _buildDocumentSection(context),
+
+          const SizedBox(height: AppSpacing.xl),
+
+          // 4. Case Details Preview
+          Text(
+            'Case Details',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.grey200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _DetailRow(label: 'Title', value: widget.caseModel.title),
+                const Divider(height: 24),
+                _DetailRow(
+                    label: 'Budget',
+                    value:
+                        'PKR ${widget.caseModel.budgetMin.toInt()} - ${widget.caseModel.budgetMax.toInt()}'),
+                const Divider(height: 24),
+                _DetailRow(label: 'Location', value: widget.caseModel.city),
+                const Divider(height: 24),
+                const Text(
+                  'Description',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.caseModel.description,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProposalsTab(BuildContext context) {
+    final proposalService = ProposalService();
+    return StreamBuilder<List<Proposal>>(
+      stream: proposalService.getProposalsForCase(widget.caseModel.caseId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        final proposals = snapshot.data ?? [];
+
+        if (proposals.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                PhosphorIcon(PhosphorIconsRegular.paperPlaneTilt,
+                    size: 64, color: AppColors.textLight),
+                SizedBox(height: AppSpacing.md),
+                Text(
+                  'No proposals yet',
+                  style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Wait for lawyers to apply to your case.',
+                  style: TextStyle(color: AppColors.textLight),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          itemCount: proposals.length,
+          itemBuilder: (context, index) {
+            final proposal = proposals[index];
+            return ClientProposalCard(
+              proposal: proposal,
+              onAccept: () => _acceptProposal(proposal),
+              onReject: () => _rejectProposal(proposal),
+              onUnreject: () => _unrejectProposal(proposal),
+              onMessage: () => _handleMessageLawyer(proposal),
+              onViewProfile: () => _handleViewProfile(proposal.lawyerId),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _acceptProposal(Proposal proposal) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Accept Proposal?'),
+        content: Text(
+          'Are you sure you want to accept ${proposal.lawyerName}\'s proposal?\n\nThis will automatically reject all other proposals for this case.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Accept & Hire'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      if (!mounted) return;
+      try {
+        await ProposalService()
+            .acceptProposal(widget.caseModel.caseId, proposal.id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Proposal accepted! Others rejected.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error accepting proposal: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectProposal(Proposal proposal) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reject Proposal?'),
+        content: Text(
+          'Are you sure you want to reject ${proposal.lawyerName}\'s proposal?',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      if (!mounted) return;
+      try {
+        await ProposalService()
+            .rejectProposal(widget.caseModel.caseId, proposal.id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Proposal rejected.')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error rejecting proposal: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _unrejectProposal(Proposal proposal) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Undo Rejection?'),
+        content: Text(
+          'Do you want to move ${proposal.lawyerName}\'s proposal back to pending?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Undo Rejection'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      if (!mounted) return;
+      try {
+        await ProposalService()
+            .unrejectProposal(widget.caseModel.caseId, proposal.id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Proposal returned to pending.')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error undoing rejection: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleMessageLawyer(Proposal proposal) async {
+    final authService = AuthService();
+    final chatService = ChatService();
+    final currentUser = authService.currentUser;
+
+    if (currentUser == null) return;
+
+    try {
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      // Fetch client profile for name
+      final clientData = await authService.getUserData(currentUser.uid);
+      final clientName = clientData?['fullName'] ?? 'Client';
+      final clientAvatar = clientData?['photoUrl'];
+
+      // Get or create chat
+      final chat = await chatService.getOrCreateChat(
+        clientId: currentUser.uid,
+        lawyerId: proposal.lawyerId,
+        clientName: clientName,
+        lawyerName: proposal.lawyerName,
+        clientAvatar: clientAvatar,
+        lawyerAvatar: proposal.lawyerImage,
+      );
+
+      if (!mounted) return;
+      // Pop loading
+      Navigator.pop(context);
+
+      // Navigate to chat
+      context.push('/chat/${chat.id}', extra: {
+        'lawyerId': proposal.lawyerId,
+        'lawyerName': proposal.lawyerName,
+        'lawyerAvatar': proposal.lawyerImage,
+      });
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Pop loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error starting chat: $e')),
+      );
+    }
+  }
+
+  void _handleViewProfile(String lawyerId) {
+    context.push('/lawyer-profile/$lawyerId');
   }
 
   Widget _buildDocumentSection(BuildContext context) {
@@ -280,7 +558,7 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
             if (!_isLoading)
               TextButton.icon(
                 onPressed: _addDocument,
-                icon: PhosphorIcon(PhosphorIconsRegular.plus, size: 16),
+                icon: const PhosphorIcon(PhosphorIconsRegular.plus, size: 16),
                 label: const Text('Add'),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.secondary,
@@ -303,7 +581,7 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                PhosphorIcon(PhosphorIconsRegular.file,
+                const PhosphorIcon(PhosphorIconsRegular.file,
                     color: AppColors.textLight),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
@@ -335,7 +613,7 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.secondary.withOpacity(0.1),
+              color: AppColors.secondary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: PhosphorIcon(
@@ -369,7 +647,7 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
             ),
           ),
           PopupMenuButton<String>(
-            icon: PhosphorIcon(PhosphorIconsRegular.dotsThreeVertical,
+            icon: const PhosphorIcon(PhosphorIconsRegular.dotsThreeVertical,
                 color: AppColors.textSecondary),
             onSelected: (value) {
               switch (value) {
@@ -447,6 +725,7 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
         String fileName = result.files.single.name;
 
         // Ask for Title
+        if (!context.mounted) return;
         String? title = await showDialog<String>(
           context: context,
           builder: (context) {
@@ -473,37 +752,35 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
         );
 
         if (title != null && title.isNotEmpty) {
+          if (!mounted) return;
           setState(() => _isLoading = true);
           await CaseService()
               .addAttachment(widget.caseModel.caseId, file, title);
 
-          // Refresh list locally for immediate feedback (ideally fetch from server)
-          // We can't know the exact URL/Type without fetching, but let's fetch the case to be safe
+          // Refresh list locally
           final updatedCases = await CaseService()
               .getCasesForClient(widget.caseModel.clientId)
               .first;
           final updatedCase = updatedCases
               .firstWhere((c) => c.caseId == widget.caseModel.caseId);
 
+          if (!mounted) return;
           setState(() {
             _attachments = updatedCase.attachments;
             _isLoading = false;
           });
 
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Document uploaded successfully')),
-            );
-          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Document uploaded successfully')),
+          );
         }
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error uploading document: $e')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error uploading document: $e')),
+      );
     }
   }
 
@@ -528,26 +805,25 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
     );
 
     if (confirm == true) {
+      if (!mounted) return;
       setState(() => _isLoading = true);
       try {
         await CaseService()
             .deleteAttachment(widget.caseModel.caseId, attachment);
+        if (!mounted) return;
         setState(() {
           _attachments.remove(attachment);
           _isLoading = false;
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Document deleted')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Document deleted')),
+        );
       } catch (e) {
+        if (!mounted) return;
         setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error deleting document: $e')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting document: $e')),
+        );
       }
     }
   }
@@ -581,6 +857,7 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
     if (newTitle != null &&
         newTitle.isNotEmpty &&
         newTitle != attachment.title) {
+      if (!mounted) return;
       setState(() => _isLoading = true);
       try {
         await CaseService().updateAttachmentTitle(
@@ -588,6 +865,7 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
 
         // Refresh local state
         final index = _attachments.indexOf(attachment);
+        if (!mounted) return;
         if (index != -1) {
           final newAttachment = CaseAttachment(
             title: newTitle,
@@ -600,18 +878,15 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
           });
         }
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Document renamed')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Document renamed')),
+        );
       } catch (e) {
+        if (!mounted) return;
         setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error renaming document: $e')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error renaming document: $e')),
+        );
       }
     }
   }
@@ -619,11 +894,10 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
   Future<void> _downloadDocument(CaseAttachment attachment) async {
     final Uri url = Uri.parse(attachment.fileUrl);
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not launch document URL')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not launch document URL')),
+      );
     }
   }
 }
@@ -657,7 +931,7 @@ class _AnalyticsCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: PhosphorIcon(icon, color: color, size: 20),
@@ -698,7 +972,7 @@ class _DetailRow extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             color: AppColors.textSecondary,
             fontSize: 12,
             fontWeight: FontWeight.w600,

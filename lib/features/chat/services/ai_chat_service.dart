@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../../../core/constants/zing_ai_config.dart';
 
 class AIChatService {
   // CORRECT URL with /api
@@ -10,9 +9,6 @@ class AIChatService {
 
   static Future<String> sendMessage(String message) async {
     try {
-      print('🌐 Zing AI: Sending to $_baseUrl$_chatPath');
-      print('📤 Message: "$message"');
-
       final response = await http.post(
         Uri.parse('$_baseUrl$_chatPath'),
         headers: {
@@ -26,9 +22,6 @@ class AIChatService {
           'user_type': 'client',
         }),
       );
-
-      print('📥 Status Code: ${response.statusCode}');
-      print('📥 Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
@@ -45,7 +38,6 @@ class AIChatService {
         return 'Zing AI: Failed with status ${response.statusCode}';
       }
     } catch (e) {
-      print('❌ Zing AI Error: $e');
       return 'Zing AI: Connection error - $e';
     }
   }

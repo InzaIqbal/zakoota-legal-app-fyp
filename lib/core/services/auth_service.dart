@@ -249,6 +249,7 @@ class AuthService {
     final bytes = await file.readAsBytes();
     final metadata = SettableMetadata(
       contentType: 'image/jpeg', // Assuming jpeg/png
+      cacheControl: 'public,max-age=300',
     );
     final task = await ref.putData(bytes, metadata);
     return await task.ref.getDownloadURL();
@@ -256,7 +257,7 @@ class AuthService {
 
   // --- Lawyer Specific Methods ---
 
-  Future<void> uploadVerification_Lawyer(
+  Future<void> uploadVerificationLawyer(
       String uid, XFile file, String docType) async {
     try {
       String path = 'verifications/lawyers/$uid/$docType.jpg';
@@ -270,18 +271,33 @@ class AuthService {
     }
   }
 
-  Future<void> uploadProfilePhoto_Lawyer(String uid, XFile file) async {
+  Future<void> uploadProfilePhotoLawyer(String uid, XFile file) async {
     try {
-      String path = 'profile_photos/$uid/profile.jpg';
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      String path = 'profile_photos/$uid/profile_$nowMs.jpg';
       String url = await _uploadFile(file, path);
 
       await _firestore.collection('users').doc(uid).update({
         'photoUrl': url,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'photoUpdatedAt': FieldValue.serverTimestamp(),
       });
+
+      // Keep FirebaseAuth profile photo in sync for places that read auth user.
+      final user = _auth.currentUser;
+      if (user != null && user.uid == uid) {
+        await user.updatePhotoURL(url);
+        await user.reload();
+      }
     } catch (e) {
       throw Exception('Failed to upload profile photo: $e');
     }
   }
+
+  /// Universal profile photo upload — works for both clients and lawyers.
+  Future<void> uploadProfilePhoto(String uid, XFile file) =>
+      uploadProfilePhotoLawyer(uid, file);
+
 
   Future<void> submitLawyerVerification(String uid) async {
     try {

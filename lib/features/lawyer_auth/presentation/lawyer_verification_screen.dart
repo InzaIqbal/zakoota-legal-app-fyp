@@ -66,14 +66,14 @@ class _LawyerVerificationScreenState extends State<LawyerVerificationScreen> {
       final user = _authService.currentUser;
       if (user != null) {
         // Upload concurrently
-        await Future.wait([
-          _authService.uploadVerification_Lawyer(
+        await Future.wait<void>([
+          _authService.uploadVerificationLawyer(
               user.uid, _cnicFront!, 'cnic_front'),
-          _authService.uploadVerification_Lawyer(
+          _authService.uploadVerificationLawyer(
               user.uid, _cnicBack!, 'cnic_back'),
-          _authService.uploadVerification_Lawyer(
+          _authService.uploadVerificationLawyer(
               user.uid, _barCouncilCard!, 'bar_council_card'),
-          _authService.uploadProfilePhoto_Lawyer(user.uid, _profilePhoto!),
+          _authService.uploadProfilePhotoLawyer(user.uid, _profilePhoto!),
         ]);
 
         if (mounted) {

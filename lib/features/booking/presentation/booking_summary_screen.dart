@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../lawyers/data/lawyer_mock_data.dart';
-import '../../wallet/presentation/wallet_screen.dart';
+import '../../../core/services/auth_service.dart';
+import '../../chat/services/chat_service.dart';
+import '../../chat/models/message_model.dart';
+import '../../cases/models/consultation_model.dart';
+import '../../cases/services/consultation_service.dart';
+import '../../wallet/services/wallet_service.dart';
 
 /// Booking Summary Screen - Review and confirm payment
 class BookingSummaryScreen extends StatefulWidget {
@@ -20,11 +25,35 @@ class BookingSummaryScreen extends StatefulWidget {
 
 class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   bool _isProcessing = false;
+  final AuthService _authService = AuthService();
+  final WalletService _walletService = WalletService();
 
   Future<void> _confirmPayment() async {
-    final price = widget.bookingData['price'] as int;
-    final balance = WalletMockData.balance;
+    if (_isProcessing) return;
+    final price = (widget.bookingData['price'] as num).toInt();
+    final lawyerId = widget.bookingData['lawyerId'] as String;
+    final lawyerName = widget.bookingData['lawyerName'] as String;
+    final lawyerAvatar = widget.bookingData['lawyerAvatar'] as String?;
+    final lawyerSpecialization = widget.bookingData['lawyerSpecialization'] as String;
+    final topic = widget.bookingData['topic'] as String;
+    final meetingType = widget.bookingData['meetingType'] as String;
+    final date = widget.bookingData['date'] as DateTime;
+    final time = widget.bookingData['time'] as String;
 
+    final currentUser = _authService.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User not logged in'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final balance = await _walletService.getWalletBalance(currentUser.uid);
+
+    if (!context.mounted) return;
     if (balance < price) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -37,57 +66,258 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
 
     setState(() => _isProcessing = true);
 
-    // Simulate payment processing
-    await Future.delayed(const Duration(seconds: 2));
+    var debitDone = false;
+    try {
 
-    if (!mounted) return;
+      // Check for existing active consultations between these two users
+      final existingConsultations = await FirebaseFirestore.instance
+          .collection('cases')
+          .doc('standalone')
+          .collection('consultations')
+          .where('requesterId', isEqualTo: currentUser.uid)
+          .where('targetId', isEqualTo: lawyerId)
+          .where('status', whereIn: ['pending', 'accepted'])
+          .get();
 
-    setState(() => _isProcessing = false);
+      if (!context.mounted) return;
 
-    // Show success dialog
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => _SuccessDialog(
-        lawyerName: widget.bookingData['lawyerName'] as String,
-        date: widget.bookingData['date'] as DateTime,
-        time: widget.bookingData['time'] as String,
-      ),
-    );
+      if (existingConsultations.docs.isNotEmpty) {
+        throw Exception('You already have an active or pending consultation with this lawyer. Please wait for it to conclude before booking another one.');
+      }
 
-    if (!mounted) return;
+      final userData = await _authService.getUserData(currentUser.uid);
+      if (!context.mounted) return;
+      final clientName = userData?['fullName'] ?? 'Client';
+      final clientAvatar = userData?['photoUrl'];
 
-    // Navigate to Cases tab (index 1 in main shell)
-    context.go('/client-cases');
+      // 1. Get or Create Chat
+      final chatService = ChatService();
+      final chat = await chatService.getOrCreateChat(
+        clientId: currentUser.uid,
+        lawyerId: lawyerId,
+        clientName: clientName,
+        lawyerName: lawyerName,
+        clientAvatar: clientAvatar,
+        lawyerAvatar: lawyerAvatar,
+      );
+
+      if (!context.mounted) return;
+
+      // Generate Consultation ID early so we can pass it to message
+      final consultationId = FirebaseFirestore.instance.collection('tmp').doc().id;
+      final operationId =
+          'consultation_booking_${currentUser.uid}_$consultationId';
+
+      await _walletService.debit(
+        userId: currentUser.uid,
+        amount: price.toDouble(),
+        reason: 'consultation_booking',
+        operationId: operationId,
+        counterpartyUserId: lawyerId,
+        referenceType: 'consultation',
+        referenceId: consultationId,
+        metadata: {
+          'lawyerName': lawyerName,
+          'topic': topic,
+        },
+      );
+      if (!context.mounted) return;
+      debitDone = true;
+
+      // 2. Create Consultation Message
+      final message = MessageModel(
+        id: '', // Generated by ChatService
+        senderId: currentUser.uid,
+        text: 'Consultation Request: $topic',
+        timestamp: DateTime.now(),
+        type: 'consultation_booking',
+        metadata: {
+          'consultationId': consultationId,
+          'caseId': 'standalone',
+          'topic': topic,
+          'meetingType': meetingType,
+          'date': date.toIso8601String(),
+          'time': time,
+          'price': price,
+          'status': 'pending',
+          'lawyerSpecialization': lawyerSpecialization,
+        },
+      );
+
+      // 3. Send Message
+      await chatService.sendMessage(chat.id, message, false);
+      if (!context.mounted) return;
+
+      // 4. Create Consultation Record for the Consultations tab
+      final consultationService = ConsultationService();
+      
+      final scheduledAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        _parseHour(time),
+        _parseMinute(time),
+      );
+
+      final consultation = ConsultationModel(
+        id: consultationId,
+        caseId: 'standalone',
+        requesterId: currentUser.uid,
+        targetId: lawyerId,
+        caseTitle: '$topic Consultation',
+        clientName: clientName,
+        lawyerName: lawyerName,
+        clientId: currentUser.uid,
+        lawyerId: lawyerId,
+        clientAvatar: clientAvatar,
+        lawyerAvatar: lawyerAvatar,
+        type: meetingType == 'online' ? 'video' : 'in_person',
+        description: topic,
+        status: 'pending',
+        scheduledAt: scheduledAt,
+        createdAt: DateTime.now(),
+        caseStatus: 'active',
+      );
+
+      await consultationService.requestConsultation(consultation, clientName, 'Client');
+
+      if (!context.mounted) return;
+      setState(() => _isProcessing = false);
+
+      // Navigate to Chat Screen
+      context.pushReplacement('/chat/${chat.id}', extra: {
+        'lawyerId': lawyerId,
+        'lawyerName': lawyerName,
+        'lawyerAvatar': lawyerAvatar,
+        'isOnline': true,
+      });
+
+    } catch (e) {
+      if (debitDone) {
+        // Best-effort rollback if debit happened and later steps failed.
+        try {
+          final consultationId = FirebaseFirestore.instance.collection('tmp').doc().id;
+          await _walletService.credit(
+            userId: currentUser.uid,
+            amount: (widget.bookingData['price'] as num).toDouble(),
+            reason: 'consultation_booking_refund',
+            operationId:
+                'consultation_refund_${currentUser.uid}_${DateTime.now().microsecondsSinceEpoch}',
+            metadata: {'cause': 'booking_create_failed', 'tempId': consultationId},
+          );
+        } catch (_) {}
+      }
+      if (!context.mounted) return;
+      setState(() => _isProcessing = false);
+      final errorMsg = e.toString().replaceAll('Exception: ', '');
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: PhosphorIcon(
+                    PhosphorIconsRegular.warningCircle,
+                    color: AppColors.error,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Booking Unavailable',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  errorMsg,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          context.go('/client-messages'); // Direct them to their active chats
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                        ),
+                        child: const Text('Go to Chats'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-
-    final lawyerId = widget.bookingData['lawyerId'] as String;
+    final lawyerName = widget.bookingData['lawyerName'] as String;
+    final lawyerAvatar = widget.bookingData['lawyerAvatar'] as String?;
+    final lawyerSpecialization = widget.bookingData['lawyerSpecialization'] as String;
+    final topic = widget.bookingData['topic'] as String;
+    final meetingType = widget.bookingData['meetingType'] as String;
     final date = widget.bookingData['date'] as DateTime;
     final time = widget.bookingData['time'] as String;
-    final price = widget.bookingData['price'] as int;
+    final price = (widget.bookingData['price'] as num).toInt();
 
-    final lawyer = LawyerMockData.getLawyerById(lawyerId);
-    final walletBalance = WalletMockData.balance;
-    final hasSufficientBalance = walletBalance >= price;
-
-    if (lawyer == null) {
-      return Scaffold(
-        body: Center(child: Text('Lawyer not found')),
+    final currentUser = _authService.currentUser;
+    if (currentUser == null) {
+      return const Scaffold(
+        body: Center(child: Text('Please login to continue')),
       );
     }
 
-    return Scaffold(
+    return StreamBuilder<double>(
+      stream: _walletService.streamWalletBalance(currentUser.uid),
+      builder: (context, walletSnapshot) {
+        final walletBalance = walletSnapshot.data ?? 0;
+        final hasSufficientBalance = walletBalance >= price;
+
+        return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         elevation: 0,
         leading: IconButton(
-          icon: PhosphorIcon(PhosphorIconsRegular.arrowLeft),
+          icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft),
           onPressed: () => context.pop(),
         ),
         title: Text(
@@ -114,7 +344,9 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                       children: [
                         CircleAvatar(
                           radius: 25,
-                          backgroundImage: NetworkImage(lawyer.photoUrl),
+                          backgroundImage: lawyerAvatar != null 
+                              ? NetworkImage(lawyerAvatar) 
+                              : const NetworkImage('https://ui-avatars.com/api/?name=Lawyer&background=random'),
                         ),
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
@@ -122,13 +354,13 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                lawyer.name,
+                                lawyerName,
                                 style: textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
                               Text(
-                                '${lawyer.specializations.first} Consultation',
+                                '$lawyerSpecialization Consultation',
                                 style: textTheme.bodySmall?.copyWith(
                                   color: AppColors.textSecondary,
                                 ),
@@ -151,7 +383,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                       children: [
                         Row(
                           children: [
-                            PhosphorIcon(
+                            const PhosphorIcon(
                               PhosphorIconsRegular.calendarBlank,
                               size: 18,
                               color: AppColors.secondary,
@@ -168,7 +400,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                         const SizedBox(height: AppSpacing.sm),
                         Row(
                           children: [
-                            PhosphorIcon(
+                            const PhosphorIcon(
                               PhosphorIconsRegular.clock,
                               size: 18,
                               color: AppColors.secondary,
@@ -194,6 +426,53 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                     title: 'Payment Details',
                     child: Column(
                       children: [
+                        // Topic
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Topic',
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const Spacer(),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                topic,
+                                style: textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        
+                        // Meeting Type
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Meeting Type',
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            Text(
+                              meetingType == 'online' ? 'Video Call' : 'In-Person',
+                              style: textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        const Divider(),
+                        const SizedBox(height: AppSpacing.md),
+                        
                         // Consultation Fee
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -259,15 +538,15 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                           Container(
                             padding: const EdgeInsets.all(AppSpacing.md),
                             decoration: BoxDecoration(
-                              color: AppColors.error.withOpacity(0.1),
+                              color: AppColors.error.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(AppRadius.sm),
                               border: Border.all(
-                                color: AppColors.error.withOpacity(0.3),
+                                color: AppColors.error.withValues(alpha: 0.3),
                               ),
                             ),
                             child: Row(
                               children: [
-                                PhosphorIcon(
+                                const PhosphorIcon(
                                   PhosphorIconsRegular.warning,
                                   size: 20,
                                   color: AppColors.error,
@@ -292,7 +571,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                               onPressed: () {
                                 context.push('/wallet');
                               },
-                              icon: PhosphorIcon(
+                              icon: const PhosphorIcon(
                                 PhosphorIconsRegular.plus,
                                 size: 18,
                               ),
@@ -321,7 +600,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
               color: AppColors.surface,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, -2),
                 ),
@@ -367,6 +646,8 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
         ],
       ),
     );
+      },
+    );
   }
 
   String _formatDate(DateTime date) {
@@ -386,6 +667,29 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
       'Dec'
     ];
     return '${weekdays[date.weekday - 1]}, ${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  int _parseHour(String timeStr) {
+    try {
+      final parts = timeStr.split(' ');
+      if (parts.length < 2) return 9; // Fallback
+      final hm = parts[0].split(':');
+      int hour = int.parse(hm[0]);
+      final ampm = parts[1].toUpperCase();
+      if (ampm == 'PM' && hour < 12) hour += 12;
+      if (ampm == 'AM' && hour == 12) hour = 0;
+      return hour;
+    } catch (_) {
+      return 9;
+    }
+  }
+
+  int _parseMinute(String timeStr) {
+    try {
+      return int.parse(timeStr.split(' ')[0].split(':')[1]);
+    } catch (_) {
+      return 0;
+    }
   }
 }
 
@@ -435,96 +739,6 @@ class _InfoCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           child,
         ],
-      ),
-    );
-  }
-}
-
-/// Success Dialog
-class _SuccessDialog extends StatelessWidget {
-  final String lawyerName;
-  final DateTime date;
-  final String time;
-
-  const _SuccessDialog({
-    required this.lawyerName,
-    required this.date,
-    required this.time,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-
-    return Dialog(
-      backgroundColor: AppColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Success Icon
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: PhosphorIcon(
-                PhosphorIconsFill.checkCircle,
-                size: 64,
-                color: AppColors.success,
-              ),
-            ),
-
-            const SizedBox(height: AppSpacing.lg),
-
-            // Title
-            Text(
-              'Booking Confirmed!',
-              style: textTheme.headlineSmall?.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w700,
-              ),
-              textAlign: TextAlign.center,
-            ),
-
-            const SizedBox(height: AppSpacing.sm),
-
-            // Message
-            Text(
-              'Your consultation with $lawyerName has been successfully booked.',
-              style: textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-
-            const SizedBox(height: AppSpacing.lg),
-
-            // Done Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.secondary,
-                  foregroundColor: AppColors.textPrimary,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppSpacing.md,
-                  ),
-                ),
-                child: const Text('View My Cases'),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

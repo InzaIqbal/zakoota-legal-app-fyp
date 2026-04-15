@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/widgets/user_avatar.dart';
 
 /// Profile Screen - User account management and settings
 class ProfileScreen extends StatelessWidget {
@@ -25,8 +26,6 @@ class ProfileScreen extends StatelessWidget {
               stream: AuthService().getUserStream(),
               builder: (context, snapshot) {
                 final userData = snapshot.data?.data();
-                final photoUrl = userData?['photoUrl'] as String? ??
-                    'https://api.dicebear.com/7.x/avataaars/png?seed=ZakootaUser';
                 final displayName = userData?['fullName'] as String? ?? 'User';
                 final isVerified =
                     (userData?['verificationStatus'] as String? ?? 'none') ==
@@ -73,10 +72,8 @@ class ProfileScreen extends StatelessWidget {
                             width: 3,
                           ),
                         ),
-                        child: CircleAvatar(
+                        child: const CurrentUserAvatar(
                           radius: 50,
-                          backgroundColor: AppColors.grey300,
-                          backgroundImage: NetworkImage(photoUrl),
                         ),
                       ),
 
@@ -101,7 +98,7 @@ class ProfileScreen extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.secondary.withOpacity(0.2),
+                            color: AppColors.secondary.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(AppRadius.full),
                             border: Border.all(
                               color: AppColors.secondary,
@@ -134,7 +131,7 @@ class ProfileScreen extends StatelessWidget {
                       Text(
                         memberSince,
                         style: textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha: 0.7),
                         ),
                       ),
                     ],
@@ -159,7 +156,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   children: [
                     // Account Section
-                    _SectionHeader(title: 'Account'),
+                    const _SectionHeader(title: 'Account'),
                     _ProfileMenuItem(
                       icon: PhosphorIconsRegular.userCircle,
                       title: 'Edit Profile',
@@ -175,11 +172,22 @@ class ProfileScreen extends StatelessWidget {
                       title: 'Saved Lawyers',
                       onTap: () => context.push('/saved-lawyers'),
                     ),
+                    _ProfileMenuItem(
+                      icon: PhosphorIconsRegular.checkCircle,
+                      title: 'Completed Cases',
+                      onTap: () => context.push('/completed-cases'),
+                    ),
+                    _ProfileMenuItem(
+                      icon: PhosphorIconsRegular.fileText,
+                      title: 'My Documents',
+                      subtitle: 'All case attachments',
+                      onTap: () => context.push('/document-review'),
+                    ),
 
                     const SizedBox(height: AppSpacing.md),
 
                     // App Settings Section
-                    _SectionHeader(title: 'App Settings'),
+                    const _SectionHeader(title: 'App Settings'),
                     _ProfileMenuItem(
                       icon: PhosphorIconsRegular.bell,
                       title: 'Notifications',
@@ -200,7 +208,7 @@ class ProfileScreen extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
 
                     // Support Section
-                    _SectionHeader(title: 'Support'),
+                    const _SectionHeader(title: 'Support'),
                     _ProfileMenuItem(
                       icon: PhosphorIconsRegular.lifebuoy,
                       title: 'Help Center',
@@ -230,7 +238,7 @@ class ProfileScreen extends StatelessWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            PhosphorIcon(
+                            const PhosphorIcon(
                               PhosphorIconsRegular.signOut,
                               color: AppColors.error,
                             ),
@@ -359,7 +367,7 @@ class _ProfileMenuItem extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: PhosphorIcon(
@@ -397,7 +405,7 @@ class _ProfileMenuItem extends StatelessWidget {
             ),
 
             // Trailing Arrow
-            PhosphorIcon(
+            const PhosphorIcon(
               PhosphorIconsRegular.caretRight,
               size: 20,
               color: AppColors.textLight,

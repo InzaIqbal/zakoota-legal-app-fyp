@@ -33,182 +33,225 @@ class _ProposalCardState extends State<ProposalCard> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final isLongText = widget.proposal.coverLetter.length > _truncateLength;
+    final isRejected = widget.proposal.status == 'rejected';
+    final isAccepted = widget.proposal.status == 'accepted';
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: isRejected
+            ? AppColors.grey100
+            : (isAccepted ? const Color(0xFFF0FDF4) : AppColors.surface),
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.grey200),
+        border: Border.all(
+          color: isAccepted
+              ? AppColors.success
+              : (isRejected ? AppColors.grey300 : AppColors.grey200),
+          width: isAccepted ? 2 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Lawyer Info & Actions
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipOval(
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  color: AppColors.grey200,
-                  child: widget.proposal.lawyerImage.isNotEmpty
-                      ? Image.network(
-                          widget.proposal.lawyerImage,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Icon(Icons.person,
-                                color: AppColors.grey500, size: 24);
-                          },
-                        )
-                      : const Icon(Icons.person,
-                          color: AppColors.grey500, size: 24),
+          // Status Banner
+          if (isRejected || isAccepted)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  vertical: 4, horizontal: AppSpacing.md),
+              decoration: BoxDecoration(
+                color: isAccepted ? AppColors.success : AppColors.grey400,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(AppRadius.lg),
+                  topRight: Radius.circular(AppRadius.lg),
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              child: Text(
+                isAccepted ? 'PROPOSAL ACCEPTED' : 'PROPOSAL REJECTED',
+                style: textTheme.labelSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Opacity(
+              opacity: isRejected ? 0.6 : 1.0,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header: Lawyer Info & Actions
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipOval(
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          color: AppColors.grey200,
+                          child: widget.proposal.lawyerImage.isNotEmpty
+                              ? Image.network(
+                                  widget.proposal.lawyerImage,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(Icons.person,
+                                        color: AppColors.grey500, size: 24);
+                                  },
+                                )
+                              : const Icon(Icons.person,
+                                  color: AppColors.grey500, size: 24),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.proposal.lawyerName,
+                              style: textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                const Icon(Icons.star_rounded,
+                                    size: 14, color: AppColors.warning),
+                                const SizedBox(width: 4),
+                                Text(
+                                  widget.proposal.rating.toString(),
+                                  style: textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Text(
+                                  '•  ${widget.proposal.location}',
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _formatDate(widget.proposal.createdAt),
+                            style: textTheme.bodySmall?.copyWith(
+                              color: AppColors.textLight,
+                              fontSize: 10,
+                            ),
+                          ),
+                          if (_isOwner && !isRejected && !isAccepted) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _ActionButton(
+                                  icon: PhosphorIconsRegular.pencilSimple,
+                                  onTap: widget.onEdit,
+                                  color: AppColors.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                _ActionButton(
+                                  icon: PhosphorIconsRegular.trash,
+                                  onTap: widget.onDelete,
+                                  color: AppColors.error,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppSpacing.md),
+                  const Divider(height: 1),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Proposal Details Summary
+                  Row(
+                    children: [
+                      _ProposalStat(
+                        label: 'Bid Amount',
+                        value:
+                            'PKR ${(widget.proposal.bidAmount / 1000).toStringAsFixed(1)}k',
+                        icon: PhosphorIconsRegular.currencyDollar,
+                      ),
+                      const SizedBox(width: AppSpacing.xl),
+                      _ProposalStat(
+                        label: 'Duration',
+                        value: widget.proposal.duration,
+                        icon: PhosphorIconsRegular.clock,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Cover Letter
+                  Text(
+                    'Cover Letter',
+                    style: textTheme.labelSmall?.copyWith(
+                      color: AppColors.textLight,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+
+                  if (isLongText && !_isExpanded) ...[
+                    Stack(
+                      children: [
+                        Text(
+                          widget.proposal.coverLetter,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    )
+                  ] else
                     Text(
-                      widget.proposal.lawyerName,
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                      widget.proposal.coverLetter,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                        height: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded,
-                            size: 14, color: AppColors.warning),
-                        const SizedBox(width: 4),
-                        Text(
-                          widget.proposal.rating.toString(),
+
+                  if (isLongText)
+                    GestureDetector(
+                      onTap: () => setState(() => _isExpanded = !_isExpanded),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          _isExpanded ? 'Show Less' : 'More',
                           style: textTheme.bodySmall?.copyWith(
+                            color: AppColors.primary,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          '•  ${widget.proposal.location}',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    _formatDate(widget.proposal.createdAt),
-                    style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.textLight,
-                      fontSize: 10,
-                    ),
-                  ),
-                  if (_isOwner) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _ActionButton(
-                          icon: PhosphorIconsRegular.pencilSimple,
-                          onTap: widget.onEdit,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        _ActionButton(
-                          icon: PhosphorIconsRegular.trash,
-                          onTap: widget.onDelete,
-                          color: AppColors.error,
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
               ),
-            ],
-          ),
-
-          const SizedBox(height: AppSpacing.md),
-          const Divider(height: 1),
-          const SizedBox(height: AppSpacing.md),
-
-          // Proposal Details Summary
-          Row(
-            children: [
-              _ProposalStat(
-                label: 'Bid Amount',
-                value:
-                    'PKR ${(widget.proposal.bidAmount / 1000).toStringAsFixed(1)}k',
-                icon: PhosphorIconsRegular.currencyDollar,
-              ),
-              const SizedBox(width: AppSpacing.xl),
-              _ProposalStat(
-                label: 'Duration',
-                value: widget.proposal.duration,
-                icon: PhosphorIconsRegular.clock,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppSpacing.md),
-
-          // Cover Letter
-          Text(
-            'Cover Letter',
-            style: textTheme.labelSmall?.copyWith(
-              color: AppColors.textLight,
-              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 4),
-
-          if (isLongText && !_isExpanded) ...[
-            Stack(
-              children: [
-                Text(
-                  widget.proposal.coverLetter,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            )
-          ] else
-            Text(
-              widget.proposal.coverLetter,
-              style: textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.5,
-              ),
-            ),
-
-          if (isLongText)
-            GestureDetector(
-              onTap: () => setState(() => _isExpanded = !_isExpanded),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Text(
-                  _isExpanded ? 'Show Less' : 'More',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );

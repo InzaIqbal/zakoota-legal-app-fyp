@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../cases/models/case_model.dart';
+import '../../cases/models/consultation_model.dart';
 import '../../cases/services/case_service.dart';
-import '../data/cases_mock_data.dart'; // Keeping for appointments mock data
+import '../../cases/services/consultation_service.dart';
+import '../../cases/services/consultation_utils.dart';
 
 /// My Cases Screen - Appointments & Active Cases
 class MyCasesScreen extends StatefulWidget {
@@ -63,14 +67,14 @@ class _MyCasesScreenState extends State<MyCasesScreen> {
               fontWeight: FontWeight.w500,
             ),
             tabs: const [
-              Tab(text: 'Appointments'),
+              Tab(text: 'Consultations'),
               Tab(text: 'My Cases'),
             ],
           ),
         ),
         body: TabBarView(
           children: [
-            _AppointmentsTab(onRefresh: _onRefresh),
+            _ConsultationsTab(onRefresh: _onRefresh),
             _MyCasesTab(onRefresh: _onRefresh),
           ],
         ),
@@ -79,72 +83,106 @@ class _MyCasesScreenState extends State<MyCasesScreen> {
   }
 }
 
-/// Appointments Tab
-class _AppointmentsTab extends StatelessWidget {
+/// Consultations Tab
+class _ConsultationsTab extends StatelessWidget {
   final Future<void> Function() onRefresh;
 
-  const _AppointmentsTab({required this.onRefresh});
+  const _ConsultationsTab({required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
-    final appointments = CasesMockData.appointments;
+    final authService = AuthService();
+    final consultationService = ConsultationService();
+    final user = authService.currentUser;
 
-    if (appointments.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: onRefresh,
-        color: AppColors.secondary,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height - 200,
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  PhosphorIcon(
-                    PhosphorIconsRegular.calendarX,
-                    size: 64,
-                    color: AppColors.textLight,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    'No upcoming appointments',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
+    if (user == null) {
+      return const Center(child: Text('Please log in to view consultations.'));
     }
 
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      color: AppColors.secondary,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        itemCount: appointments.length,
-        itemBuilder: (context, index) {
-          return _AppointmentCard(appointment: appointments[index]);
-        },
-      ),
+    return StreamBuilder<List<ConsultationModel>>(
+      stream: consultationService.getConsultationsForUser(user.uid),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        final consultations = snapshot.data ?? [];
+
+        if (consultations.isEmpty) {
+          return RefreshIndicator(
+            onRefresh: onRefresh,
+            color: AppColors.secondary,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height - 200,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      PhosphorIcon(
+                        PhosphorIconsRegular.calendarX,
+                        size: 64,
+                        color: AppColors.textLight,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'No consultations yet',
+                        style:
+                            Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: onRefresh,
+          color: AppColors.secondary,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            itemCount: consultations.length,
+            itemBuilder: (context, index) {
+              return _ConsultationCard(
+                consultation: consultations[index],
+                currentUserId: user.uid,
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
 
-/// Appointment Card Widget
-class _AppointmentCard extends StatelessWidget {
-  final Appointment appointment;
+/// Consultation Card Widget
+class _ConsultationCard extends StatelessWidget {
+  final ConsultationModel consultation;
+  final String currentUserId;
 
-  const _AppointmentCard({required this.appointment});
+  const _ConsultationCard({
+    required this.consultation,
+    required this.currentUserId,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final typeIcon = consultation.type == 'video'
+        ? PhosphorIconsRegular.videoCamera
+        : PhosphorIconsRegular.usersThree;
+
+    final isStandalone = consultation.caseId == 'standalone';
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -152,9 +190,12 @@ class _AppointmentCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
+        border: isStandalone 
+            ? Border.all(color: AppColors.secondary.withValues(alpha: 0.3), width: 1.5)
+            : null,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -175,14 +216,14 @@ class _AppointmentCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  _getMonth(appointment.date),
+                  _getMonth(consultation.scheduledAt),
                   style: textTheme.bodySmall?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
-                  '${appointment.date.day}',
+                  '${consultation.scheduledAt.day}',
                   style: textTheme.headlineMedium?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -199,36 +240,68 @@ class _AppointmentCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  appointment.lawyerName,
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      consultation.caseTitle,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (isStandalone) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'DIRECT',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: AppColors.secondary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  appointment.consultationType,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: 2),
                 Row(
                   children: [
                     PhosphorIcon(
-                      PhosphorIconsRegular.clock,
+                      typeIcon,
                       size: 16,
-                      color: AppColors.secondary,
+                      color: AppColors.primary,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Text(
-                      '${_formatTime(appointment.date)} - ${_formatTime(appointment.endTime)}',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
+                      consultation.type == 'video' ? 'Video Call' : 'In-Person',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 4),
+                // determine partner name to show
+                Text(
+                  'With: ${consultation.requesterId == currentUserId ? consultation.lawyerName : consultation.clientName}',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Time: ${consultation.scheduledAt.hour.toString().padLeft(2, '0')}:${consultation.scheduledAt.minute.toString().padLeft(2, '0')}',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: AppColors.textLight,
+                  ),
                 ),
               ],
             ),
@@ -238,24 +311,142 @@ class _AppointmentCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _StatusChip(status: appointment.status),
-              const SizedBox(height: 4),
-              IconButton(
-                icon: PhosphorIcon(
-                  PhosphorIconsRegular.dotsThreeVertical,
-                  size: 20,
-                ),
-                onPressed: () {
-                  _showAppointmentMenu(context);
-                },
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+              _ConsultationStatusChip(status: consultation.status),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isStandalone)
+                    IconButton(
+                      icon: PhosphorIcon(
+                        PhosphorIconsRegular.chatCircleDots,
+                        size: 20,
+                        color: AppColors.secondary,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        context.push(
+                          '/chat/direct/${consultation.requesterId == currentUserId ? consultation.lawyerId : consultation.clientId}',
+                          extra: {
+                            'clientId': consultation.clientId,
+                            'lawyerId': consultation.lawyerId,
+                            'clientName': consultation.clientName,
+                            'lawyerName': consultation.lawyerName,
+                            'clientAvatar': consultation.clientAvatar,
+                            'lawyerAvatar': consultation.lawyerAvatar,
+                          },
+                        );
+                      },
+                      tooltip: 'Go to Chat',
+                    ),
+                  if (isStandalone) const SizedBox(width: 8),
+                  PopupMenuButton<String>(
+                    child: PhosphorIcon(
+                      PhosphorIconsRegular.dotsThreeVertical,
+                      size: 20,
+                    ),
+                    onSelected: (value) {
+                      _handleConsultationAction(context, value);
+                    },
+                    itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                      const PopupMenuItem<String>(
+                        value: 'details',
+                        child: Text('View Details'),
+                      ),
+                      if (consultation.status == 'pending' &&
+                          consultation.targetId == currentUserId)
+                        const PopupMenuItem<String>(
+                          value: 'respond',
+                          child: Text('Respond'),
+                        ),
+                      if (ConsultationUtils.canCancel(consultation))
+                        const PopupMenuItem<String>(
+                          value: 'cancel',
+                          child: Text('Cancel'),
+                        ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  void _handleConsultationAction(BuildContext context, String action) {
+    switch (action) {
+      case 'details':
+        context.push('/consultation-details/${consultation.caseId}/${consultation.id}');
+        break;
+      case 'respond':
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Go to workspace to respond to consultation')),
+        );
+        break;
+      case 'cancel':
+        _showCancelDialog(context);
+        break;
+    }
+  }
+
+  void _showCancelDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Consultation'),
+        content: const Text(
+            'Are you sure you want to cancel this consultation?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _cancelConsultation(context);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+            ),
+            child: const Text('Cancel Consultation'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _cancelConsultation(BuildContext context) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      await ConsultationService().requestCancellation(
+        consultation,
+        user?.uid ?? 'unknown',
+        user?.displayName ?? 'User',
+        'Cancelled by user',
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Consultation cancelled'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   String _getMonth(DateTime date) {
@@ -275,58 +466,13 @@ class _AppointmentCard extends StatelessWidget {
     ];
     return months[date.month - 1];
   }
-
-  String _formatTime(DateTime time) {
-    final hour = time.hour > 12 ? time.hour - 12 : time.hour;
-    final period = time.hour >= 12 ? 'PM' : 'AM';
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute $period';
-  }
-
-  void _showAppointmentMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: PhosphorIcon(PhosphorIconsRegular.calendarX),
-              title: const Text('Cancel Appointment'),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Appointment cancelled')),
-                );
-              },
-            ),
-            ListTile(
-              leading: PhosphorIcon(PhosphorIconsRegular.clockCounterClockwise),
-              title: const Text('Reschedule'),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Reschedule feature coming soon')),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
-/// Status Chip Widget
-class _StatusChip extends StatelessWidget {
-  final AppointmentStatus status;
+/// Consultation Status Chip Widget
+class _ConsultationStatusChip extends StatelessWidget {
+  final String status;
 
-  const _StatusChip({required this.status});
+  const _ConsultationStatusChip({required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -337,26 +483,36 @@ class _StatusChip extends StatelessWidget {
     String label;
 
     switch (status) {
-      case AppointmentStatus.confirmed:
-        backgroundColor = AppColors.success.withOpacity(0.1);
+      case 'accepted':
+        backgroundColor = AppColors.success.withValues(alpha: 0.1);
         textColor = AppColors.success;
-        label = 'Confirmed';
+        label = 'Accepted';
         break;
-      case AppointmentStatus.pending:
-        backgroundColor = const Color(0xFFFFA726).withOpacity(0.1);
+      case 'pending':
+        backgroundColor = const Color(0xFFFFA726).withValues(alpha: 0.1);
         textColor = const Color(0xFFFFA726);
         label = 'Pending';
         break;
-      case AppointmentStatus.cancelled:
-        backgroundColor = AppColors.error.withOpacity(0.1);
+      case 'rejected':
+      case 'cancelled':
+        backgroundColor = AppColors.error.withValues(alpha: 0.1);
         textColor = AppColors.error;
-        label = 'Cancelled';
+        label = status == 'rejected' ? 'Rejected' : 'Cancelled';
         break;
-      case AppointmentStatus.completed:
-        backgroundColor = AppColors.textLight.withOpacity(0.1);
+      case 'completed':
+        backgroundColor = AppColors.textLight.withValues(alpha: 0.1);
         textColor = AppColors.textSecondary;
         label = 'Completed';
         break;
+      case 'no_show':
+        backgroundColor = AppColors.error.withValues(alpha: 0.1);
+        textColor = AppColors.error;
+        label = 'No Show';
+        break;
+      default:
+        backgroundColor = AppColors.textLight.withValues(alpha: 0.1);
+        textColor = AppColors.textSecondary;
+        label = status;
     }
 
     return Container(
@@ -548,7 +704,7 @@ class _CaseSummaryCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -561,7 +717,7 @@ class _CaseSummaryCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.05),
+              color: statusColor.withValues(alpha: 0.05),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(AppRadius.md),
                 topRight: Radius.circular(AppRadius.md),
@@ -572,7 +728,7 @@ class _CaseSummaryCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.sm),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: PhosphorIcon(
@@ -601,7 +757,27 @@ class _CaseSummaryCard extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      if (!caseModel.isAdVisible)
+                      if (caseModel.status == 'active')
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance.collection('users').doc(caseModel.acceptedLawyerId).get(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData && snapshot.data!.exists) {
+                              final name = snapshot.data!.get('fullName') ?? 'Lawyer';
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 4.0),
+                                child: Text(
+                                  'Lawyer: $name',
+                                  style: textTheme.labelMedium?.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        )
+                      else if (!caseModel.isAdVisible)
                         Padding(
                           padding: const EdgeInsets.only(top: 4.0),
                           child: Text(
@@ -616,29 +792,30 @@ class _CaseSummaryCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Ad Visibility Toggle
-                Transform.scale(
-                  scale: 0.8,
-                  child: Switch(
-                    value: caseModel.isAdVisible,
-                    activeColor: Colors.black,
-                    activeTrackColor: Colors.grey.withOpacity(0.3),
-                    inactiveThumbColor: Colors.white,
-                    inactiveTrackColor: Colors.black.withOpacity(0.1),
-                    onChanged: (value) async {
-                      try {
-                        await CaseService()
-                            .toggleAdVisibility(caseModel.caseId, value);
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error updating ad: $e')),
-                          );
+                // Ad Visibility Toggle - Hide if active
+                if (caseModel.status != 'active')
+                  Transform.scale(
+                    scale: 0.8,
+                    child: Switch(
+                      value: caseModel.isAdVisible,
+                      activeThumbColor: Colors.black,
+                      activeTrackColor: Colors.grey.withValues(alpha: 0.3),
+                      inactiveThumbColor: Colors.white,
+                      inactiveTrackColor: Colors.black.withValues(alpha: 0.1),
+                      onChanged: (value) async {
+                        try {
+                          await CaseService()
+                              .toggleAdVisibility(caseModel.caseId, value);
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error updating ad: $e')),
+                            );
+                          }
                         }
-                      }
-                    },
+                      },
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -669,7 +846,7 @@ class _CaseSummaryCard extends StatelessWidget {
                     Expanded(
                       child: Row(
                         children: [
-                          PhosphorIcon(
+                          const PhosphorIcon(
                             PhosphorIconsRegular.mapPin,
                             size: 18,
                             color: AppColors.secondary,
@@ -702,7 +879,7 @@ class _CaseSummaryCard extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          PhosphorIcon(
+                          const PhosphorIcon(
                             PhosphorIconsRegular.calendar,
                             size: 14,
                             color: AppColors.textLight,
@@ -732,13 +909,13 @@ class _CaseSummaryCard extends StatelessWidget {
                           context.push('/case-ad-details', extra: caseModel);
                         },
                         icon: PhosphorIcon(
-                          PhosphorIconsRegular.chartLineUp,
+                          caseModel.status == 'active' ? PhosphorIconsRegular.briefcase : PhosphorIconsRegular.chartLineUp,
                           size: 16,
                         ),
-                        label: const Text('Manage Ad'),
+                        label: Text(caseModel.status == 'active' ? 'Open Workspace' : 'Manage Ad'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.primary,
-                          side: BorderSide(color: AppColors.grey300),
+                          side: const BorderSide(color: AppColors.grey300),
                           padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
                       ),

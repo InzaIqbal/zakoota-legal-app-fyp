@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:intl/intl.dart';
+
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
 import '../../cases/models/case_model.dart';
 import '../../cases/services/case_service.dart';
-
-// ... (existing imports)
+import '../models/recent_update_model.dart';
+import '../services/recent_update_service.dart';
+import '../../notifications/services/notification_service.dart';
+import '../../events/models/event_model.dart';
+import '../../events/services/event_service.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   const ClientHomeScreen({super.key});
@@ -17,6 +22,8 @@ class ClientHomeScreen extends StatefulWidget {
 }
 
 class _ClientHomeScreenState extends State<ClientHomeScreen> {
+  final NotificationService _notificationService = NotificationService();
+
   Future<void> _onRefresh() async {
     // Simulate data refresh
     await Future.delayed(const Duration(seconds: 1));
@@ -32,265 +39,46 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     }
   }
 
-  Widget _buildEmptyActiveCasesState(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.grey200),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: PhosphorIcon(
-                PhosphorIconsRegular.briefcase,
-                color: AppColors.primary,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'No active cases',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                  ),
-                  Text(
-                    'Post a new case to get started.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                // Navigate to Post Case
-                context.push('/post-case');
-              },
-              child: const Text('Post Case'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final textTheme = theme.textTheme;
-
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.grey.shade50,
+      appBar: _buildAppBar(context),
       body: RefreshIndicator(
         onRefresh: _onRefresh,
         color: AppColors.secondary,
-        child: CustomScrollView(
-          slivers: [
-            // A. SLIVER APP BAR - Header
-            _buildSliverAppBar(context),
-
-            // B. PRIORITY ACTION CARD
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: _PriorityActionCard(
-                  data: ClientHomeData.priorityAction,
-                ),
-              ),
-            ),
-
-            // C. ACTIVE CASES - Horizontal Scroll
-            SliverToBoxAdapter(
-              child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
-                stream: AuthService().getUserStream(),
-                builder: (context, userSnapshot) {
-                  final userId = userSnapshot.data?.id;
-                  if (userId == null) return const SizedBox.shrink();
-
-                  return StreamBuilder<List<CaseModel>>(
-                    stream: CaseService().getCasesForClient(userId),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const SizedBox(
-                          height: 160,
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-
-                      if (snapshot.hasError) {
-                        return Padding(
-                          padding: const EdgeInsets.all(AppSpacing.md),
-                          child: Text('Error loading cases: ${snapshot.error}'),
-                        );
-                      }
-
-                      final allCases = snapshot.data ?? [];
-                      // Filter for 'open' or 'active' cases
-                      final activeCases = allCases
-                          .where(
-                              (c) => c.status == 'open' || c.status == 'active')
-                          .toList();
-
-                      if (activeCases.isEmpty) {
-                        return _buildEmptyActiveCasesState(context);
-                      }
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md,
-                              vertical: AppSpacing.sm,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Active Cases',
-                                  style: textTheme.headlineSmall?.copyWith(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    context.go('/client-cases');
-                                  },
-                                  child: Text(
-                                    'View All',
-                                    style: textTheme.labelLarge?.copyWith(
-                                      color: colorScheme.secondary,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(
-                            height: 160,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.md,
-                              ),
-                              itemCount: activeCases.length,
-                              itemBuilder: (context, index) {
-                                return _ActiveCaseCard(
-                                  caseModel: activeCases[index],
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                        ],
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-
-            // D. SERVICES GRID
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Legal Services',
-                      style: textTheme.headlineSmall?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    GridView.count(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisCount: 4,
-                      mainAxisSpacing: AppSpacing.md,
-                      crossAxisSpacing: AppSpacing.md,
-                      children: ClientHomeData.services.map((service) {
-                        return _ServiceItem(service: service);
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // E. RECENT ACTIVITY - Vertical List
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
-                ),
-                child: Text(
-                  'Recent Updates',
-                  style: textTheme.headlineSmall?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  return _RecentActivityTile(
-                    activity: ClientHomeData.recentActivities[index],
-                  );
-                },
-                childCount: ClientHomeData.recentActivities.length,
-              ),
-            ),
-
-            // Bottom Padding
-            const SliverToBoxAdapter(
-              child: SizedBox(height: AppSpacing.xl),
-            ),
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          children: [
+            _buildPriorityEventStream(),
+            const SizedBox(height: 28),
+            _buildLegalServicesGrid(context),
+            const SizedBox(height: 28),
+            _buildActiveCasesStream(),
+            const SizedBox(height: 28),
+            _buildRecentUpdatesStream(),
+            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
-  SliverAppBar _buildSliverAppBar(BuildContext context) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-    final colorScheme = theme.colorScheme;
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
-    return SliverAppBar(
-      pinned: true,
-      floating: true,
-      backgroundColor: AppColors.surface,
+    return AppBar(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
       elevation: 0,
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(color: Colors.grey.shade200, height: 1),
+      ),
+      leadingWidth: 64,
       leading: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
         child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
           stream: AuthService().getUserStream(),
           builder: (context, snapshot) {
@@ -316,14 +104,16 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               Text(
                 'Welcome back,',
                 style: textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: Colors.grey.shade600,
+                  fontSize: 11,
                 ),
               ),
               Text(
                 displayName,
                 style: textTheme.titleMedium?.copyWith(
-                  color: colorScheme.primary,
+                  color: Colors.black87,
                   fontWeight: FontWeight.w700,
+                  fontSize: 16,
                 ),
               ),
             ],
@@ -331,7 +121,6 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
         },
       ),
       actions: [
-        // Wallet Chip
         GestureDetector(
           onTap: () {
             context.push('/wallet');
@@ -340,30 +129,29 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             stream: AuthService().getUserStream(),
             builder: (context, snapshot) {
               final userData = snapshot.data?.data();
-              final walletBalance = userData?['walletBalance'] as int? ?? 0;
+              final walletBalance =
+                  (userData?['walletBalance'] as num?)?.toInt() ?? 0;
 
               return Container(
-                margin: const EdgeInsets.only(right: AppSpacing.sm),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
-                ),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.grey.shade300),
                 ),
                 child: Row(
                   children: [
                     PhosphorIcon(
                       PhosphorIconsRegular.wallet,
-                      color: colorScheme.secondary,
-                      size: 18,
+                      color: colorScheme.primary,
+                      size: 16,
                     ),
-                    const SizedBox(width: AppSpacing.xs),
+                    const SizedBox(width: 6),
                     Text(
                       'PKR $walletBalance',
                       style: textTheme.labelMedium?.copyWith(
-                        color: Colors.white,
+                        color: Colors.black87,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -373,377 +161,704 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             },
           ),
         ),
+        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+          stream: AuthService().getUserStream(),
+          builder: (context, userSnapshot) {
+            final userId = userSnapshot.data?.id;
+            if (userId == null) return const SizedBox.shrink();
 
-        // Notification Icon with Badge
-        Stack(
-          children: [
-            IconButton(
-              icon: PhosphorIcon(
-                PhosphorIconsRegular.bell,
-                color: colorScheme.primary,
-              ),
-              onPressed: () {
-                context.push('/notifications');
+            return StreamBuilder<int>(
+              stream: _notificationService.streamUnreadCount(userId),
+              builder: (context, unreadSnapshot) {
+                final unreadCount = unreadSnapshot.data ?? 0;
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IconButton(
+                      icon: PhosphorIcon(
+                        PhosphorIconsRegular.bell,
+                        color: Colors.black87,
+                      ),
+                      onPressed: () => context.push('/notifications'),
+                    ),
+                    if (unreadCount > 0)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: AppColors.error,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            unreadCount > 99 ? '99+' : unreadCount.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
               },
-            ),
-            Positioned(
-              right: 8,
-              top: 8,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: AppColors.error,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         ),
-        const SizedBox(width: AppSpacing.sm),
+        const SizedBox(width: 8),
       ],
     );
   }
-}
 
-/// Priority Action Card Widget
-class _PriorityActionCard extends StatelessWidget {
-  final PriorityActionData data;
+  Widget _buildPriorityEventStream() {
+    final userId = AuthService().currentUser?.uid;
+    if (userId == null) return const SizedBox.shrink();
 
-  const _PriorityActionCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary,
-            AppColors.primary.withOpacity(0.8),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Background Icon
-          Positioned(
-            right: -20,
-            top: -20,
-            child: PhosphorIcon(
-              PhosphorIconsRegular.gavel,
-              size: 140,
-              color: Colors.white.withOpacity(0.1),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            "Today's Agenda",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
             ),
           ),
+        ),
+        const SizedBox(height: 12),
+        StreamBuilder<EventModel?>(
+          stream: EventService().getNextUpcomingEvent(userId),
+          builder: (context, eventSnapshot) {
+            if (eventSnapshot.hasError) {
+              return _buildPriorityEventCard(null); // Fallback if no index or offline
+            }
+            if (eventSnapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: SizedBox(
+                  height: 100, 
+                  child: Center(child: CircularProgressIndicator())
+                ),
+              );
+            }
+            final event = eventSnapshot.data;
+            return _buildPriorityEventCard(event);
+          },
+        ),
+      ],
+    );
+  }
 
-          // Content
-          Row(
+  Widget _buildPriorityEventCard(EventModel? event) {
+    if (event == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          color: Colors.white,
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: CircleAvatar(
+              backgroundColor: AppColors.success.withOpacity(0.1),
+              radius: 24,
+              child: PhosphorIcon(PhosphorIconsRegular.coffee,
+                  color: AppColors.success),
+            ),
+            title: const Text('All caught up!',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                  'You have no urgent events or hearings today. Enjoy your day.',
+                  style:
+                      TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final dateFormat = DateFormat('MMM d, h:mm a');
+    final formattedDate = dateFormat.format(event.scheduledAt);
+    final eventKind = event.type == 'consultation'
+      ? 'Consultation'
+      : event.type == 'hearing'
+        ? 'Hearing'
+        : 'Workspace Event';
+    final eventLocation = (event.location != null && event.location!.isNotEmpty)
+      ? event.location!
+      : event.subtitle;
+    final caseId = _resolveEventCaseId(event);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Card(
+        elevation: 0,
+        color: AppColors.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      data.title,
-                      style: textTheme.headlineSmall?.copyWith(
-                        color: AppColors.secondary,
-                        fontWeight: FontWeight.w700,
-                      ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      data.subtitle,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
-                      ),
+                    child: Text(
+                      eventKind,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12),
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    ElevatedButton(
-                      onPressed: () {
-                        context.push('/case-details/204');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                          vertical: AppSpacing.sm,
-                        ),
-                      ),
-                      child: const Text('View Details'),
-                    ),
-                  ],
+                  ),
+                  PhosphorIcon(
+                    event.type == 'consultation'
+                        ? PhosphorIconsRegular.users
+                        : PhosphorIconsRegular.gavel,
+                    color: Colors.white70,
+                    size: 24,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(event.title,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(eventLocation,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              const SizedBox(height: 2),
+              Text(
+                formattedDate,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: caseId == null
+                      ? null
+                      : () => context.push(
+                            '/case-workspace?caseId=$caseId&isClient=true&tab=events',
+                          ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.primary,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('View Details',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Active Case Card Widget
-class _ActiveCaseCard extends StatelessWidget {
-  final CaseModel caseModel;
-
-  const _ActiveCaseCard({required this.caseModel});
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    // Determine progress based on status
-    double progress = 0.1;
-    if (caseModel.status.toLowerCase() == 'active' ||
-        caseModel.status.toLowerCase() == 'open') progress = 0.5;
-    if (caseModel.status.toLowerCase() == 'closed') progress = 1.0;
-
-    return GestureDetector(
-      onTap: () {
-        context.push('/case-ad-details', extra: caseModel);
-      },
-      child: Container(
-        width: 200,
-        margin: const EdgeInsets.only(right: AppSpacing.md),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Case ID - Handle if caseId is long or null
-            Text(
-              caseModel.caseId.length > 8
-                  ? '#${caseModel.caseId.substring(0, 8).toUpperCase()}'
-                  : '#${caseModel.caseId.toUpperCase()}',
-              style: textTheme.labelLarge?.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-
-            // Lawyer Info
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: AppColors.grey200,
-                  child: PhosphorIcon(PhosphorIconsRegular.user, size: 16),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    caseModel.title.isNotEmpty ? caseModel.title : 'No Title',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-
-            const Spacer(),
-
-            // Progress
-            Text(
-              'Status: ${caseModel.status}',
-              style: textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-                fontSize: 11,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            LinearProgressIndicator(
-              value: progress,
-              backgroundColor: AppColors.grey200,
-              valueColor: AlwaysStoppedAnimation<Color>(colorScheme.secondary),
-            ),
-          ],
         ),
       ),
     );
   }
-}
 
-/// Service Item Widget
-class _ServiceItem extends StatelessWidget {
-  final ServiceData service;
+  String? _resolveEventCaseId(EventModel event) {
+    if (event.caseId != null && event.caseId!.isNotEmpty) {
+      return event.caseId;
+    }
 
-  const _ServiceItem({required this.service});
+    if (event.referenceId.isNotEmpty && event.type == 'case_event') {
+      return event.referenceId;
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final match = RegExp(r'Case #([A-Za-z0-9_-]+)').firstMatch(event.subtitle);
+    return match?.group(1);
+  }
 
-    return InkWell(
-      onTap: () {
-        // Navigate to lawyer search with category filter
-        context.push('/lawyer-search?category=${service.name}');
-      },
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: AppColors.grey200,
-            width: 1,
+  Widget _buildLegalServicesGrid(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Legal Services',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
           ),
         ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: ClientHomeData.services
+                .map((service) => _buildServiceItem(context, service))
+                .toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildServiceItem(BuildContext context, ServiceData service) {
+    return GestureDetector(
+      onTap: () => context.push(service.route),
+      child: SizedBox(
+        width: 76,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            PhosphorIcon(
-              service.icon,
-              size: 32,
-              color: AppColors.primary,
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: PhosphorIcon(service.icon,
+                  color: AppColors.primary, size: 28),
             ),
-            const SizedBox(height: AppSpacing.xs),
             Text(
               service.name,
-              style: textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-                fontSize: 11,
-              ),
               textAlign: TextAlign.center,
+              maxLines: 2,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500,
+                height: 1.2,
+              ),
             ),
           ],
         ),
       ),
     );
   }
-}
 
-/// Recent Activity Tile Widget
-class _RecentActivityTile extends StatelessWidget {
-  final RecentActivityData activity;
+  Widget _buildActiveCasesStream() {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+      stream: AuthService().getUserStream(),
+      builder: (context, userSnapshot) {
+        final userId = userSnapshot.data?.id;
+        if (userId == null) return const SizedBox.shrink();
 
-  const _RecentActivityTile({required this.activity});
+        return StreamBuilder<List<CaseModel>>(
+          stream: CaseService().getCasesForClient(userId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                  height: 160,
+                  child: Center(child: CircularProgressIndicator()));
+            }
+            if (snapshot.hasError) {
+              return const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Error loading cases'),
+              );
+            }
 
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+            final activeCases = (snapshot.data ?? [])
+                .where((c) => c.status == 'open' || c.status == 'active')
+                .toList();
 
-    return InkWell(
-      onTap: () => _handleTap(context),
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Container(
-        margin: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.xs,
-        ),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: Row(
-          children: [
-            // Leading Icon
-            CircleAvatar(
-              backgroundColor: activity.iconColor.withOpacity(0.1),
-              child: PhosphorIcon(
-                activity.icon,
-                color: activity.iconColor,
-                size: 20,
-              ),
-            ),
-
-            const SizedBox(width: AppSpacing.md),
-
-            // Content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    activity.title,
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Active Cases',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => context.go('/client-cases'),
+                        child: Text(
+                          'View All',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (activeCases.isEmpty)
+                  _buildEmptyActiveCasesState(context)
+                else
+                  SizedBox(
+                    height: 180,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.only(left: 16, right: 4),
+                      itemCount: activeCases.length,
+                      itemBuilder: (context, index) {
+                        return _buildActiveCaseCard(context, activeCases[index]);
+                      },
                     ),
                   ),
-                  const SizedBox(height: 2),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyActiveCasesState(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        color: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: AppColors.primary.withOpacity(0.1),
+                radius: 24,
+                child: PhosphorIcon(PhosphorIconsRegular.briefcase,
+                    color: AppColors.primary),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('No active cases',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 15)),
+                    const SizedBox(height: 4),
+                    Text('Post a new case to get started.',
+                        style: TextStyle(
+                            color: Colors.grey.shade600, fontSize: 13)),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () => context.push('/post-case'),
+                style: TextButton.styleFrom(
+                  backgroundColor: AppColors.primary.withOpacity(0.1),
+                  foregroundColor: AppColors.primary,
+                ),
+                child: const Text('Post Case'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'open':
+        return AppColors.info;
+      case 'active':
+        return AppColors.warning;
+      case 'closed':
+        return AppColors.success;
+      case 'pending':
+        return AppColors.secondary;
+      default:
+        return AppColors.textSecondary;
+    }
+  }
+
+  String _getStatusLabel(String status) {
+    switch (status.toLowerCase()) {
+      case 'open':
+        return 'Open';
+      case 'active':
+        return 'Active';
+      case 'closed':
+        return 'Closed';
+      case 'pending':
+        return 'Pending';
+      default:
+        return status;
+    }
+  }
+
+  Widget _buildActiveCaseCard(BuildContext context, CaseModel caseModel) {
+    final statusColor = _getStatusColor(caseModel.status);
+
+    return InkWell(
+      onTap: () => context.push('/case-ad-details', extra: caseModel),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 260,
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
                   Text(
-                    activity.subtitle,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
+                    '#${caseModel.caseId.substring(0, (caseModel.caseId.length > 8 ? 8 : caseModel.caseId.length)).toUpperCase()}',
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _getStatusLabel(caseModel.status).toUpperCase(),
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
-
-            // Trailing Time
-            Text(
-              activity.time,
-              style: textTheme.bodySmall?.copyWith(
-                color: AppColors.textLight,
-                fontSize: 11,
+              const SizedBox(height: 12),
+              Text(
+                caseModel.title.isNotEmpty ? caseModel.title : 'Untitled Case',
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  height: 1.3,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+              const Spacer(),
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (caseModel.budgetMin > 0)
+                    Text(
+                      'Rs. ${caseModel.budgetMin.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  const Text(
+                    'View Details',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _handleTap(BuildContext context) {
-    // Navigate based on activity title/type
-    if (activity.title.contains('Message')) {
-      // Navigate to chat with the lawyer mentioned
-      context.push('/chat/lawyer_1', extra: {
-        'lawyerName': 'Adv. Sarah Ahmed',
-        'lawyerId': 'lawyer_1',
-        'isOnline': true,
-        'lawyerAvatar': 'https://api.dicebear.com/7.x/avataaars/png?seed=Sarah',
-      });
-    } else if (activity.title.contains('Hearing') ||
-        activity.title.contains('Case')) {
-      // Navigate to case details for Case #204
-      final caseIdMatch = RegExp(r'#(\d+)').firstMatch(activity.subtitle);
-      if (caseIdMatch != null) {
-        final caseId = caseIdMatch.group(1);
-        context.push('/case-details/$caseId');
-      }
-    } else if (activity.title.contains('Document')) {
-      // Navigate to case details for the document
-      final caseIdMatch = RegExp(r'#([\w-]+)').firstMatch(activity.subtitle);
-      if (caseIdMatch != null) {
-        final caseId = caseIdMatch.group(1)?.replaceAll('CHD-', '');
-        if (caseId != null) {
-          context.push('/case-details/$caseId');
-        }
+  Widget _buildRecentUpdatesStream() {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+      stream: AuthService().getUserStream(),
+      builder: (context, userSnapshot) {
+        final userId = userSnapshot.data?.id;
+        if (userId == null) return const SizedBox.shrink();
+
+        return StreamBuilder<List<RecentUpdate>>(
+          stream: RecentUpdateService().streamRecentUpdates(userId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                  height: 200,
+                  child: Center(child: CircularProgressIndicator()));
+            }
+            if (snapshot.hasError) return const SizedBox.shrink();
+
+            final updates = snapshot.data ?? [];
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Recent Updates',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (updates.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Center(
+                      child: Text(
+                        'No recent updates yet',
+                        style: TextStyle(color: Colors.grey.shade500),
+                      ),
+                    ),
+                  )
+                else
+                  Card(
+                    elevation: 0,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    shape: RoundedRectangleBorder(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    color: Colors.white,
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: updates.length,
+                      separatorBuilder: (context, index) =>
+                          Divider(height: 1, color: Colors.grey.shade200),
+                      itemBuilder: (context, index) {
+                        final update = updates[index];
+                        return ListTile(
+                          onTap: () => _handleUpdateTap(context, update),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          leading: CircleAvatar(
+                            backgroundColor:
+                                _getUpdateColor(update.colorType).withOpacity(0.1),
+                            child: PhosphorIcon(
+                              _getUpdateIcon(update.iconType),
+                              color: _getUpdateColor(update.colorType),
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            update.title,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87),
+                          ),
+                          subtitle: Text(
+                            update.message,
+                            style: TextStyle(
+                                fontSize: 13, color: Colors.grey.shade600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Text(
+                            _formatTime(update.timestamp),
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey.shade500),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _handleUpdateTap(BuildContext context, RecentUpdate update) {
+    if (update.relatedId != null) {
+      if (update.type == UpdateType.casePosted ||
+          update.type == UpdateType.proposalReceived ||
+          update.type == UpdateType.documentUploaded) {
+        context.push('/case-details/${update.relatedId}');
+      } else if (update.type == UpdateType.messageReceived) {
+        context.push('/chat/${update.relatedId}');
+      } else if (update.type == UpdateType.consultationScheduled) {
+        context.push('/consultation-details/${update.relatedId}');
       }
     }
+  }
+
+  PhosphorIconData _getUpdateIcon(String type) {
+    switch (type) {
+      case 'briefcase': return PhosphorIconsRegular.briefcase;
+      case 'fileText': return PhosphorIconsRegular.fileText;
+      case 'check': return PhosphorIconsRegular.check;
+      case 'x': return PhosphorIconsRegular.x;
+      case 'creditCard': return PhosphorIconsRegular.creditCard;
+      case 'prohibit': return PhosphorIconsRegular.prohibit;
+      case 'checkCircle': return PhosphorIconsRegular.checkCircle;
+      case 'calendar': return PhosphorIconsRegular.calendar;
+      case 'upload': return PhosphorIconsRegular.upload;
+      case 'checkDouble': return PhosphorIconsRegular.checks;
+      case 'chatCircle': return PhosphorIconsRegular.chatCircle;
+      default: return PhosphorIconsRegular.info;
+    }
+  }
+
+  Color _getUpdateColor(String type) {
+    switch (type) {
+      case 'success': return AppColors.success;
+      case 'error': return AppColors.error;
+      case 'secondary': return Theme.of(context).colorScheme.secondary;
+      case 'info': return AppColors.info;
+      default: return Colors.grey.shade600;
+    }
+  }
+
+  String _formatTime(DateTime timestamp) {
+    final difference = DateTime.now().difference(timestamp);
+    if (difference.inMinutes < 1) return 'Just now';
+    if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
+    if (difference.inHours < 24) return '${difference.inHours}h ago';
+    if (difference.inDays < 7) return '${difference.inDays}d ago';
+    return '${timestamp.month}/${timestamp.day}';
   }
 }
 
@@ -758,12 +873,26 @@ class ClientHomeData {
   );
 
   static final List<ServiceData> services = [
-    ServiceData(name: 'Criminal', icon: PhosphorIconsRegular.shield),
-    ServiceData(name: 'Property', icon: PhosphorIconsRegular.house),
-    ServiceData(name: 'Family', icon: PhosphorIconsRegular.users),
-    ServiceData(name: 'Corporate', icon: PhosphorIconsRegular.briefcase),
-    ServiceData(name: 'Civil', icon: PhosphorIconsRegular.scales),
-    ServiceData(name: 'Startups', icon: PhosphorIconsRegular.rocket),
+    ServiceData(
+      name: 'Find Lawyers',
+      icon: PhosphorIconsRegular.magnifyingGlass,
+      route: '/lawyer-search',
+    ),
+    ServiceData(
+      name: 'Post a Case',
+      icon: PhosphorIconsRegular.briefcase,
+      route: '/create-case',
+    ),
+    ServiceData(
+      name: 'Document Review',
+      icon: PhosphorIconsRegular.fileText,
+      route: '/document-review',
+    ),
+    ServiceData(
+      name: 'Legal Articles',
+      icon: PhosphorIconsRegular.books,
+      route: '/legal-articles',
+    ),
   ];
 
   static final List<RecentActivityData> recentActivities = [
@@ -811,10 +940,12 @@ class PriorityActionData {
 class ServiceData {
   final String name;
   final PhosphorIconData icon;
+  final String route;
 
   ServiceData({
     required this.name,
     required this.icon,
+    required this.route,
   });
 }
 

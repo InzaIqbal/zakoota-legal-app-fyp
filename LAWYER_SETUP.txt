@@ -1,0 +1,162 @@
+LAWYER SEED DATA - SETUP GUIDE
+================================
+
+All dummy lawyers have been removed. To add real lawyers to your Firestore database, follow these steps:
+
+IMPORTANT FEATURES:
+===================
+✓ Only lawyers with isActive: true appear in search results
+✓ Only verified lawyers (isVerified: true) appear in search results
+✓ Lawyers can toggle their profile on/off from their dashboard
+✓ When not filters applied, ALL active and verified lawyers are shown
+✓ Lawyers missing info CAN still appear (no restrictions on missing fields)
+
+STEP 1: SIGN UP AS LAWYERS
+==========================
+Use the app's lawyer signup flow or Firebase Console to create lawyer accounts:
+
+1. sarah@zakoota.com - Password: Sarah@123
+2. hassan@zakoota.com - Password: Hassan@123
+3. fatima@zakoota.com - Password: Fatima@123
+4. usman@zakoota.com - Password: Usman@123
+5. zainab@zakoota.com - Password: Zainab@123
+6. imran@zakoota.com - Password: Imran@123
+
+
+STEP 2: POPULATE LAWYER DETAILS IN FIRESTORE
+==============================================
+
+Option A: Firebase Console (Easy)
+---------------------------------
+1. Go to Firebase Console > Firestore Database
+2. Create a new collection called "lawyers"
+3. Click "Add document" for each lawyer
+4. Set Document ID as: sarah, hassan, fatima, usman, zainab, imran
+5. Add the following fields for each:
+
+For sarah@zakoota.com:
+- name: "Adv. Sarah Ahmed"
+- title: "Senior Advocate"
+- location: "Lahore High Court"
+- photoUrl: "https://i.pravatar.cc/150?img=5"
+- specializations: ["Criminal Law", "Constitutional Law"]
+- experience: 12
+- casesWon: 145
+- rating: 4.9
+- reviewCount: 120
+- pricePerConsultation: 3000
+- isVerified: true
+- isActive: true
+- education: ["LLB, Punjab University", "LLM, Oxford University"]
+- barCouncil: "Lahore High Court Bar Association"
+- aboutMe: "Senior criminal law specialist with 12 years of experience."
+- reviews: [] (empty array)
+
+For hassan@zakoota.com:
+- name: "Adv. Hassan Ali"
+- title: "Advocate High Court"
+- location: "Islamabad"
+- photoUrl: "https://i.pravatar.cc/150?img=12"
+- specializations: ["Property Law", "Corporate Law"]
+- experience: 8
+- casesWon: 98
+- rating: 4.7
+- reviewCount: 85
+- pricePerConsultation: 2500
+- isVerified: true
+- isActive: true
+- education: ["LLB, Quaid-e-Azam University"]
+- barCouncil: "Islamabad Bar Association"
+- aboutMe: "Property and corporate law specialist."
+- reviews: []
+
+For fatima@zakoota.com:
+- name: "Adv. Fatima Khan"
+- title: "Senior Advocate"
+- location: "Karachi High Court"
+- photoUrl: "https://i.pravatar.cc/150?img=9"
+- specializations: ["Family Law", "Divorce & Custody"]
+- experience: 10
+- casesWon: 112
+- rating: 4.8
+- reviewCount: 95
+- pricePerConsultation: 2800
+- isVerified: true
+- isActive: true
+- education: ["LLB, Karachi University"]
+- barCouncil: "Karachi Bar Association"
+- aboutMe: "Family law and women rights advocate."
+- reviews: []
+
+For usman@zakoota.com:
+- name: "Adv. Usman Malik"
+- title: "Corporate Lawyer"
+- location: "Lahore"
+- photoUrl: "https://i.pravatar.cc/150?img=15"
+- specializations: ["Startup Law", "Business Formation"]
+- experience: 6
+- casesWon: 67
+- rating: 4.6
+- reviewCount: 52
+- pricePerConsultation: 3500
+- isVerified: true
+- isActive: true
+- education: ["LLB, LUMS"]
+- barCouncil: "Punjab Bar Council"
+- aboutMe: "Startup and business law expert."
+- reviews: []
+
+For zainab@zakoota.com:
+- name: "Adv. Zainab Siddiqui"
+- title: "Civil Rights Advocate"
+- location: "Supreme Court"
+- photoUrl: "https://i.pravatar.cc/150?img=20"
+- specializations: ["Civil Law", "Public Interest"]
+- experience: 15
+- casesWon: 178
+- rating: 4.9
+- reviewCount: 142
+- pricePerConsultation: 4000
+- isVerified: true
+- isActive: true
+- education: ["LLB, Lahore University", "LLM, Cambridge"]
+- barCouncil: "Supreme Court Bar Association"
+- aboutMe: "Civil rights and constitutional law expert."
+- reviews: []
+
+For imran@zakoota.com:
+- name: "Adv. Imran Haider"
+- title: "Tax & Finance Lawyer"
+- location: "Islamabad"
+- photoUrl: "https://i.pravatar.cc/150?img=33"
+- specializations: ["Tax Law", "Banking Law"]
+- experience: 9
+- casesWon: 89
+- rating: 4.5
+- reviewCount: 68
+- pricePerConsultation: 3200
+- isVerified: true
+- isActive: true
+- education: ["LLB, IIU"]
+- barCouncil: "Islamabad Bar Association"
+- aboutMe: "Tax and banking law specialist."
+- reviews: []
+
+
+Option B: Programmatically (Advanced)
+--------------------------------------
+Implement a function in your AuthService or create a new service to populate Firestore.
+See lawyer_seed_data.dart for the complete data structure.
+
+
+DIRECTORY STRUCTURE
+===================
+lib/features/lawyers/
+├── data/
+│   ├── lawyer_mock_data.dart (EMPTY - no mock data)
+│   └── lawyer_seed_data.dart (Contains seed data with email/password)
+├── services/
+│   └── lawyer_service.dart (Fetches from Firestore only)
+└── presentation/
+    └── lawyer_search_screen.dart (Displays lawyers from Firestore)
+

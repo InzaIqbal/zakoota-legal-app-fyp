@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../services/wallet_service.dart';
 
 /// Add Funds Dialog - Modal bottom sheet for adding money
 class AddFundsDialog extends StatefulWidget {
@@ -13,6 +15,8 @@ class AddFundsDialog extends StatefulWidget {
 
 class _AddFundsDialogState extends State<AddFundsDialog> {
   final TextEditingController _amountController = TextEditingController();
+  final AuthService _authService = AuthService();
+  final WalletService _walletService = WalletService();
   String _selectedPaymentMethod = 'card';
   bool _isProcessing = false;
 
@@ -33,24 +37,63 @@ class _AddFundsDialogState extends State<AddFundsDialog> {
       return;
     }
 
+    final amount = double.tryParse(_amountController.text);
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a valid amount'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final user = _authService.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login again'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
-    // Simulate payment processing
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final operationId =
+          'dummy_deposit_${user.uid}_${DateTime.now().microsecondsSinceEpoch}';
+      await _walletService.depositDummy(
+        userId: user.uid,
+        amount: amount,
+        method: _selectedPaymentMethod,
+        operationId: operationId,
+      );
 
-    if (!mounted) return;
-
-    Navigator.pop(context);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Funds Added Successfully - PKR ${_amountController.text}',
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Funds Added Successfully - PKR ${amount.toStringAsFixed(0)}'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
         ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
   }
 
   @override
@@ -89,13 +132,14 @@ class _AddFundsDialogState extends State<AddFundsDialog> {
             const SizedBox(height: AppSpacing.lg),
 
             // Title
-            Text(
-              'Add Funds to Wallet',
-              style: textTheme.headlineSmall?.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w700,
+              const Text(
+                'Add Funds to Wallet',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 20,
+                ),
               ),
-            ),
             const SizedBox(height: AppSpacing.lg),
 
             // Amount Input
@@ -245,7 +289,7 @@ class _PaymentMethodCard extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.secondary.withOpacity(0.1)
+              ? AppColors.secondary.withValues(alpha: 0.1)
               : AppColors.background,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(

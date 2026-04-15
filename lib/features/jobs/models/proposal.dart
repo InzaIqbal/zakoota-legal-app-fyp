@@ -10,7 +10,8 @@ class Proposal {
   final String coverLetter;
   final double bidAmount;
   final String duration;
-  final DateTime createdAt; // Changed to DateTime
+  final DateTime createdAt;
+  final String status; // 'pending', 'accepted', 'rejected'
 
   const Proposal({
     required this.id,
@@ -23,6 +24,7 @@ class Proposal {
     required this.bidAmount,
     required this.duration,
     required this.createdAt,
+    this.status = 'pending',
   });
 
   Map<String, dynamic> toMap() {
@@ -36,6 +38,7 @@ class Proposal {
       'bidAmount': bidAmount,
       'duration': duration,
       'createdAt': Timestamp.fromDate(createdAt),
+      'status': status,
     };
   }
 
@@ -52,6 +55,7 @@ class Proposal {
       bidAmount: (map['bidAmount'] ?? 0.0).toDouble(),
       duration: map['duration'] ?? '',
       createdAt: (map['createdAt'] as Timestamp).toDate(),
+      status: map['status'] ?? 'pending',
     );
   }
 }

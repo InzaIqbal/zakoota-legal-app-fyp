@@ -76,6 +76,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
         });
       }
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error picking files: $e')),
       );
@@ -99,6 +100,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
       String title =
           (attachment['controller'] as TextEditingController).text.trim();
       if (title.isEmpty) {
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Please provide a title for all attachments.')),
@@ -110,6 +112,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
 
     final user = _authService.currentUser;
     if (user == null) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You must be logged in to post a case.')),
       );
@@ -143,7 +146,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
         attachments: serviceAttachments,
       );
 
-      if (!mounted) return;
+      if (!context.mounted) return;
 
       // Show success dialog
       await showDialog(
@@ -152,12 +155,12 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
         builder: (context) => _SuccessDialog(),
       );
 
-      if (!mounted) return;
+      if (!context.mounted) return;
 
       // Navigate back to My Cases
       context.go('/client-cases');
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to post case: $e'),
@@ -165,7 +168,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      if (context.mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -181,7 +184,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: PhosphorIcon(PhosphorIconsRegular.arrowLeft),
+          icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft),
           onPressed: () => context.pop(),
         ),
         title: Text(
@@ -219,7 +222,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                       decoration: InputDecoration(
                         labelText: 'Case Title *',
                         hintText: 'e.g., Property Dispute in Lahore',
-                        prefixIcon: PhosphorIcon(
+                        prefixIcon: const PhosphorIcon(
                           PhosphorIconsRegular.textT,
                           color: AppColors.secondary,
                         ),
@@ -228,18 +231,18 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(color: AppColors.grey300),
+                          borderSide: const BorderSide(color: AppColors.grey300),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(
+                          borderSide: const BorderSide(
                             color: AppColors.secondary,
                             width: 2,
                           ),
                         ),
                         errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(color: AppColors.error),
+                          borderSide: const BorderSide(color: AppColors.error),
                         ),
                       ),
                       validator: (value) {
@@ -257,10 +260,10 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
 
                     // Category Dropdown
                     DropdownButtonFormField<String>(
-                      value: _selectedCategory,
+                      initialValue: _selectedCategory,
                       decoration: InputDecoration(
                         labelText: 'Category *',
-                        prefixIcon: PhosphorIcon(
+                        prefixIcon: const PhosphorIcon(
                           PhosphorIconsRegular.folder,
                           color: AppColors.secondary,
                         ),
@@ -269,18 +272,18 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(color: AppColors.grey300),
+                          borderSide: const BorderSide(color: AppColors.grey300),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(
+                          borderSide: const BorderSide(
                             color: AppColors.secondary,
                             width: 2,
                           ),
                         ),
                         errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(color: AppColors.error),
+                          borderSide: const BorderSide(color: AppColors.error),
                         ),
                       ),
                       items: _categories.map((category) {
@@ -308,7 +311,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                       decoration: InputDecoration(
                         labelText: 'City / Location *',
                         hintText: 'e.g., Lahore High Court',
-                        prefixIcon: PhosphorIcon(
+                        prefixIcon: const PhosphorIcon(
                           PhosphorIconsRegular.mapPin,
                           color: AppColors.secondary,
                         ),
@@ -317,18 +320,18 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(color: AppColors.grey300),
+                          borderSide: const BorderSide(color: AppColors.grey300),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(
+                          borderSide: const BorderSide(
                             color: AppColors.secondary,
                             width: 2,
                           ),
                         ),
                         errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(color: AppColors.error),
+                          borderSide: const BorderSide(color: AppColors.error),
                         ),
                       ),
                       validator: (value) {
@@ -356,18 +359,18 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(color: AppColors.grey300),
+                          borderSide: const BorderSide(color: AppColors.grey300),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(
+                          borderSide: const BorderSide(
                             color: AppColors.secondary,
                             width: 2,
                           ),
                         ),
                         errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(color: AppColors.error),
+                          borderSide: const BorderSide(color: AppColors.error),
                         ),
                       ),
                       validator: (value) {
@@ -392,7 +395,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                         labelText: 'Budget (Required)',
                         hintText: 'e.g., 50000',
                         prefixText: 'PKR ',
-                        prefixIcon: PhosphorIcon(
+                        prefixIcon: const PhosphorIcon(
                           PhosphorIconsRegular.currencyCircleDollar,
                           color: AppColors.secondary,
                         ),
@@ -401,11 +404,11 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(color: AppColors.grey300),
+                          borderSide: const BorderSide(color: AppColors.grey300),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(
+                          borderSide: const BorderSide(
                             color: AppColors.secondary,
                             width: 2,
                           ),
@@ -430,33 +433,30 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.grey300),
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                      ),
-                      child: Column(
-                        children: [
-                          RadioListTile<String>(
-                            title: const Text(
-                                'In-Person (Visit Lawyer\'s Office)'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildChoiceCard(
+                            title: 'In-Person',
+                            subtitle: 'Visit Lawyer\'s Office',
                             value: 'in_person',
                             groupValue: _meetingPreference,
-                            onChanged: (value) =>
-                                setState(() => _meetingPreference = value!),
-                            activeColor: AppColors.secondary,
+                            onChanged: (v) => setState(() => _meetingPreference = v),
+                            icon: PhosphorIconsRegular.buildings,
                           ),
-                          const Divider(height: 0),
-                          RadioListTile<String>(
-                            title: const Text('Virtual (Video Call)'),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: _buildChoiceCard(
+                            title: 'Virtual',
+                            subtitle: 'Video Call',
                             value: 'virtual',
                             groupValue: _meetingPreference,
-                            onChanged: (value) =>
-                                setState(() => _meetingPreference = value!),
-                            activeColor: AppColors.secondary,
+                            onChanged: (v) => setState(() => _meetingPreference = v),
+                            icon: PhosphorIconsRegular.videoCamera,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
 
                     const SizedBox(height: AppSpacing.xl),
@@ -492,11 +492,11 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                             style: BorderStyle.solid,
                           ),
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          color: AppColors.secondary.withOpacity(0.05),
+                          color: AppColors.secondary.withValues(alpha: 0.05),
                         ),
                         child: Column(
                           children: [
-                            PhosphorIcon(
+                            const PhosphorIcon(
                               PhosphorIconsRegular.uploadSimple,
                               size: 48,
                               color: AppColors.secondary,
@@ -539,7 +539,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                             border: Border.all(color: AppColors.grey300),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2),
                               ),
@@ -556,7 +556,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
                                   borderRadius:
                                       BorderRadius.circular(AppRadius.sm),
                                 ),
-                                child: PhosphorIcon(
+                                child: const PhosphorIcon(
                                   PhosphorIconsRegular.fileText,
                                   size: 24,
                                   color: AppColors.primary,
@@ -605,7 +605,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
 
                               // Delete Button
                               IconButton(
-                                icon: PhosphorIcon(
+                                icon: const PhosphorIcon(
                                   PhosphorIconsRegular.trash,
                                   size: 20,
                                   color: AppColors.error,
@@ -634,7 +634,7 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
               color: AppColors.surface,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, -2),
                 ),
@@ -695,6 +695,68 @@ class _CreateCaseScreenState extends State<CreateCaseScreen> {
       ),
     );
   }
+  Widget _buildChoiceCard({
+    required String title,
+    required String subtitle,
+    required String value,
+    required String groupValue,
+    required ValueChanged<String> onChanged,
+    required PhosphorIconData icon,
+  }) {
+    final isSelected = value == groupValue;
+    return InkWell(
+      onTap: () => onChanged(value),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.md, horizontal: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.secondary.withValues(alpha: 0.1) : Colors.white,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(
+            color: isSelected ? AppColors.secondary : AppColors.grey300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            PhosphorIcon(
+              icon,
+              color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+              size: 24,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: isSelected ? AppColors.textPrimary : AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSnack(String msg, {bool isError = false}) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+      ));
+    }
+  }
 }
 
 /// Success Dialog
@@ -718,10 +780,10 @@ class _SuccessDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
+                color: AppColors.success.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: PhosphorIcon(
+              child: const PhosphorIcon(
                 PhosphorIconsFill.checkCircle,
                 size: 64,
                 color: AppColors.success,

@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/auth_service.dart';
+import '../../chat/services/chat_service.dart';
 import '../data/lawyer_mock_data.dart';
+import '../services/lawyer_service.dart';
+import '../../../core/widgets/user_avatar.dart';
 
 /// Lawyer Profile Screen - Detailed lawyer portfolio
-class LawyerProfileScreen extends StatelessWidget {
+class LawyerProfileScreen extends StatefulWidget {
   final String lawyerId;
 
   const LawyerProfileScreen({
@@ -14,16 +18,106 @@ class LawyerProfileScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final lawyer = LawyerMockData.getLawyerById(lawyerId);
+  State<LawyerProfileScreen> createState() => _LawyerProfileScreenState();
+}
 
-    if (lawyer == null) {
+class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
+  final _lawyerService = LawyerService();
+  final _authService = AuthService();
+  final _chatService = ChatService();
+  LawyerProfile? _lawyer;
+  bool _isLoading = true;
+  bool _isMessageLoading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLawyer();
+  }
+
+  Future<void> _fetchLawyer() async {
+    try {
+      final lawyer = await _lawyerService.getLawyerById(widget.lawyerId);
+      
+      LawyerProfile? completeLawyer = lawyer;
+      if (lawyer != null) {
+        // Fetch accurate reviews and rating dynamically
+        final reviewsData = await _lawyerService.getLawyerReviews(widget.lawyerId);
+        final dynamicReviews = reviewsData['reviews'] as List<LawyerReview>;
+        final dynamicRating = reviewsData['rating'] as double;
+        final dynamicCount = reviewsData['count'] as int;
+
+        // Create a new instance merging the dynamic reviews data
+        completeLawyer = LawyerProfile(
+          id: lawyer.id,
+          fullName: lawyer.fullName,
+          professionalHeading: lawyer.professionalHeading,
+          location: lawyer.location,
+          photoUrl: lawyer.photoUrl,
+          specializations: lawyer.specializations,
+          experienceYears: lawyer.experienceYears,
+          rating: dynamicReviews.isNotEmpty ? dynamicRating : lawyer.rating,
+          reviewsCount: dynamicReviews.isNotEmpty ? dynamicCount : lawyer.reviewsCount,
+          hourlyRate: lawyer.hourlyRate,
+          verificationStatus: lawyer.verificationStatus,
+          accountStatus: lawyer.accountStatus,
+          isAcceptingCases: lawyer.isAcceptingCases,
+          education: lawyer.education,
+          barLicenseNo: lawyer.barLicenseNo,
+          bio: lawyer.bio,
+          reviews: dynamicReviews.isNotEmpty ? dynamicReviews : lawyer.reviews,
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _lawyer = completeLawyer;
+          _isLoading = false;
+          if (completeLawyer == null) {
+            _error = 'Lawyer not found: ${widget.lawyerId}';
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Error loading profile: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null || _lawyer == null) {
       return Scaffold(
+        appBar: AppBar(title: const Text('Profile')),
         body: Center(
-          child: Text('Lawyer not found'),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(_error ?? 'Lawyer not found',
+                  style: const TextStyle(fontSize: 16)),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _fetchLawyer,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       );
     }
+
+    final lawyer = _lawyer!;
 
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
@@ -41,7 +135,7 @@ class LawyerProfileScreen extends StatelessWidget {
                 pinned: true,
                 backgroundColor: AppColors.primary,
                 leading: IconButton(
-                  icon: PhosphorIcon(
+                  icon: const PhosphorIcon(
                     PhosphorIconsRegular.arrowLeft,
                     color: Colors.white,
                   ),
@@ -64,10 +158,10 @@ class LawyerProfileScreen extends StatelessWidget {
                         child: Column(
                           children: [
                             // Photo
-                            CircleAvatar(
+                            UserAvatar(
+                              uid: lawyer.id,
                               radius: 50,
-                              backgroundImage: NetworkImage(lawyer.photoUrl),
-                              backgroundColor: AppColors.grey200,
+                              fallbackName: lawyer.name,
                             ),
                             const SizedBox(height: AppSpacing.sm),
 
@@ -85,7 +179,7 @@ class LawyerProfileScreen extends StatelessWidget {
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  PhosphorIcon(
+                                  const PhosphorIcon(
                                     PhosphorIconsFill.seal,
                                     size: 16,
                                     color: AppColors.secondary,
@@ -132,7 +226,7 @@ class LawyerProfileScreen extends StatelessWidget {
                       Expanded(
                         child: _StatCard(
                           icon: PhosphorIconsRegular.star,
-                          value: '${lawyer.rating}',
+                          value: lawyer.ratingDouble.toStringAsFixed(1),
                           label: 'Rating',
                         ),
                       ),
@@ -197,12 +291,12 @@ class LawyerProfileScreen extends StatelessWidget {
                           return Chip(
                             label: Text(spec),
                             backgroundColor:
-                                AppColors.secondary.withOpacity(0.1),
+                                AppColors.secondary.withValues(alpha: 0.1),
                             labelStyle: textTheme.labelMedium?.copyWith(
                               color: AppColors.primary,
                               fontWeight: FontWeight.w600,
                             ),
-                            side: BorderSide(
+                            side: const BorderSide(
                               color: AppColors.secondary,
                             ),
                           );
@@ -254,7 +348,7 @@ class LawyerProfileScreen extends StatelessWidget {
                             ],
                           ),
                         );
-                      }).toList(),
+                      }),
                       const SizedBox(height: AppSpacing.xs),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,7 +361,7 @@ class LawyerProfileScreen extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              lawyer.barCouncil,
+                              lawyer.barLicenseNo,
                               style: textTheme.bodyMedium?.copyWith(
                                 color: AppColors.textSecondary,
                               ),
@@ -301,7 +395,7 @@ class LawyerProfileScreen extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            '${lawyer.reviewCount} reviews',
+                            '${lawyer.reviewsCount} reviews',
                             style: textTheme.bodySmall?.copyWith(
                               color: AppColors.textSecondary,
                             ),
@@ -418,7 +512,7 @@ class LawyerProfileScreen extends StatelessWidget {
                 color: AppColors.surface,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 8,
                     offset: const Offset(0, -2),
                   ),
@@ -428,18 +522,52 @@ class LawyerProfileScreen extends StatelessWidget {
                 children: [
                   // Message Button
                   OutlinedButton.icon(
-                    onPressed: () {
-                      context.push('/chat/${lawyer.id}', extra: {
-                        'lawyerName': lawyer.name,
-                        'lawyerId': lawyer.id,
-                        'isOnline': true,
-                        'lawyerAvatar': lawyer.photoUrl,
-                      });
-                    },
-                    icon: PhosphorIcon(
-                      PhosphorIconsRegular.chatCircleText,
-                      size: 20,
-                    ),
+                    onPressed: _isMessageLoading
+                        ? null
+                        : () async {
+                            try {
+                              setState(() => _isMessageLoading = true);
+                              final userData = await _authService.getUserData(
+                                  _authService.currentUser!.uid);
+
+                              final chat = await _chatService.getOrCreateChat(
+                                clientId: _authService.currentUser!.uid,
+                                clientName: userData?['fullName'] ?? 'Client',
+                                clientAvatar: userData?['photoUrl'] ?? '',
+                                lawyerId: lawyer.id,
+                                lawyerName: lawyer.name,
+                                lawyerAvatar: lawyer.photoUrl,
+                              );
+
+                              if (!context.mounted) return;
+                              context.push('/chat/${chat.id}', extra: {
+                                'lawyerId': lawyer.id,
+                                'lawyerName': lawyer.name,
+                                'lawyerAvatar': lawyer.photoUrl,
+                                'isOnline': true,
+                              });
+                            } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text('Error starting chat: $e')),
+                            );
+                            } finally {
+                              if (mounted) {
+                                setState(() => _isMessageLoading = false);
+                              }
+                            }
+                          },
+                    icon: _isMessageLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const PhosphorIcon(
+                            PhosphorIconsRegular.chatCircleText,
+                            size: 20,
+                          ),
                     label: const Text('Message'),
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(color: colorScheme.primary),

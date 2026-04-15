@@ -2,17 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/auth_service.dart';
+import '../models/wallet_transaction_model.dart';
+import '../services/wallet_service.dart';
 import 'widgets/add_funds_dialog.dart';
-import 'widgets/withdraw_dialog.dart';
 
 /// Wallet Screen - View balance and transactions
-class WalletScreen extends StatelessWidget {
+class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
 
   @override
+  State<WalletScreen> createState() => _WalletScreenState();
+}
+
+class _WalletScreenState extends State<WalletScreen> {
+  final AuthService _authService = AuthService();
+  final WalletService _walletService = WalletService();
+
+  @override
   Widget build(BuildContext context) {
+    final user = _authService.currentUser;
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+
+    if (user == null) {
+      return const Scaffold(
+        body: Center(child: Text('Please login to access wallet')),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.primary,
@@ -52,16 +69,31 @@ class WalletScreen extends StatelessWidget {
                 Text(
                   'Total Balance',
                   style: textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'PKR ${WalletMockData.balance.toStringAsFixed(2)}',
-                  style: textTheme.displaySmall?.copyWith(
-                    color: AppColors.secondary,
-                    fontWeight: FontWeight.w700,
-                  ),
+                StreamBuilder<double>(
+                  stream: _walletService.streamWalletBalance(user.uid),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Text(
+                        'PKR 0.00',
+                        style: textTheme.displaySmall?.copyWith(
+                          color: AppColors.secondary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      );
+                    }
+                    final balance = snapshot.data ?? 0;
+                    return Text(
+                      'PKR ${balance.toStringAsFixed(2)}',
+                      style: textTheme.displaySmall?.copyWith(
+                        color: AppColors.secondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
@@ -96,12 +128,7 @@ class WalletScreen extends StatelessWidget {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) => const WithdrawDialog(),
-                          );
+                          context.push('/withdraw');
                         },
                         icon: PhosphorIcon(
                           PhosphorIconsRegular.bank,
@@ -151,37 +178,58 @@ class WalletScreen extends StatelessWidget {
 
                   // Transactions List
                   Expanded(
-                    child: WalletMockData.transactions.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                PhosphorIcon(
-                                  PhosphorIconsRegular.wallet,
-                                  size: 64,
-                                  color: AppColors.textLight,
-                                ),
-                                const SizedBox(height: AppSpacing.md),
-                                Text(
-                                  'No transactions yet',
-                                  style: textTheme.bodyLarge?.copyWith(
+                    child: StreamBuilder<List<WalletTransactionModel>>(
+                        stream: _walletService.streamWalletTransactions(user.uid),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(AppSpacing.lg),
+                                child: Text(
+                                  'Unable to load transactions right now.',
+                                  style: textTheme.bodyMedium?.copyWith(
                                     color: AppColors.textSecondary,
                                   ),
+                                  textAlign: TextAlign.center,
                                 ),
-                              ],
-                            ),
-                          )
-                        : ListView.builder(
+                              ),
+                            );
+                          }
+                          final transactions = snapshot.data ?? [];
+                          if (transactions.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  PhosphorIcon(
+                                    PhosphorIconsRegular.wallet,
+                                    size: 64,
+                                    color: AppColors.textLight,
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  Text(
+                                    'No transactions yet',
+                                    style: textTheme.bodyLarge?.copyWith(
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          return ListView.builder(
                             padding: const EdgeInsets.symmetric(
                               horizontal: AppSpacing.md,
                             ),
-                            itemCount: WalletMockData.transactions.length,
+                            itemCount: transactions.length,
                             itemBuilder: (context, index) {
                               return TransactionTile(
-                                transaction: WalletMockData.transactions[index],
+                                transaction: transactions[index],
                               );
                             },
-                          ),
+                          );
+                        },
+                      ),
                   ),
                 ],
               ),
@@ -195,7 +243,7 @@ class WalletScreen extends StatelessWidget {
 
 /// Transaction Tile Widget
 class TransactionTile extends StatelessWidget {
-  final WalletTransaction transaction;
+  final WalletTransactionModel transaction;
 
   const TransactionTile({
     super.key,
@@ -206,7 +254,7 @@ class TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final isCredit = transaction.type == TransactionType.credit;
+    final isCredit = transaction.type == WalletTxType.credit;
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -222,8 +270,8 @@ class TransactionTile extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
               color: isCredit
-                  ? AppColors.success.withOpacity(0.1)
-                  : AppColors.error.withOpacity(0.1),
+                  ? AppColors.success.withValues(alpha: 0.1)
+                  : AppColors.error.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: PhosphorIcon(
@@ -243,7 +291,7 @@ class TransactionTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  transaction.title,
+                  _displayReason(transaction.reason),
                   style: textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
@@ -251,7 +299,7 @@ class TransactionTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  transaction.date,
+                  _formatDate(transaction.createdAt),
                   style: textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
                     fontSize: 12,
@@ -273,67 +321,25 @@ class TransactionTile extends StatelessWidget {
       ),
     );
   }
-}
 
-// ============================================================================
-// MOCK DATA
-// ============================================================================
+  String _formatDate(DateTime dt) {
+    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
 
-class WalletMockData {
-  static double balance = 15400.00;
-
-  static final List<WalletTransaction> transactions = [
-    WalletTransaction(
-      title: 'EasyPaisa Deposit',
-      date: 'Today, 10:00 AM',
-      amount: 5000,
-      type: TransactionType.credit,
-    ),
-    WalletTransaction(
-      title: 'Consultation Fee - Adv. Sarah Ahmed',
-      date: 'Today, 9:15 AM',
-      amount: 3000,
-      type: TransactionType.debit,
-    ),
-    WalletTransaction(
-      title: 'JazzCash Deposit',
-      date: 'Yesterday, 2:30 PM',
-      amount: 10000,
-      type: TransactionType.credit,
-    ),
-    WalletTransaction(
-      title: 'Consultation Fee - Adv. Hassan Ali',
-      date: 'Feb 3, 3:45 PM',
-      amount: 2500,
-      type: TransactionType.debit,
-    ),
-    WalletTransaction(
-      title: 'Bank Transfer',
-      date: 'Feb 2, 11:20 AM',
-      amount: 8000,
-      type: TransactionType.credit,
-    ),
-    WalletTransaction(
-      title: 'Document Fee',
-      date: 'Feb 1, 4:10 PM',
-      amount: 500,
-      type: TransactionType.debit,
-    ),
-  ];
-}
-
-enum TransactionType { credit, debit }
-
-class WalletTransaction {
-  final String title;
-  final String date;
-  final double amount;
-  final TransactionType type;
-
-  WalletTransaction({
-    required this.title,
-    required this.date,
-    required this.amount,
-    required this.type,
-  });
+  String _displayReason(String reason) {
+    switch (reason) {
+      case 'deposit_dummy':
+        return 'Wallet Deposit';
+      case 'withdrawal_request':
+        return 'Withdrawal Request';
+      case 'consultation_booking':
+        return 'Consultation Booking';
+      case 'invoice_payment':
+        return 'Invoice Payment';
+      default:
+        return reason.replaceAll('_', ' ').trim().isEmpty
+            ? 'Wallet Transaction'
+            : reason.replaceAll('_', ' ');
+    }
+  }
 }

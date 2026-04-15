@@ -190,7 +190,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
               color: AppColors.surface,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 4,
                   offset: const Offset(0, -2),
                 ),
@@ -318,7 +318,7 @@ class _MessageBubble extends StatelessWidget {
                   _formatTime(message['time'] as DateTime),
                   style: textTheme.labelSmall?.copyWith(
                     color: isUser
-                        ? Colors.white.withOpacity(0.7)
+                        ? Colors.white.withValues(alpha: 0.7)
                         : AppColors.textLight,
                     fontSize: 10,
                   ),

@@ -17,47 +17,50 @@ class OnboardingContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-    final colorScheme = theme.colorScheme;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Icon Container
           Container(
-            width: 120,
-            height: 120,
+            width: 140,
+            height: 140,
             decoration: BoxDecoration(
-              color: colorScheme.secondary.withOpacity(0.1),
+              gradient: RadialGradient(
+                colors: [
+                  AppColors.secondary.withValues(alpha: 0.3),
+                  AppColors.secondary.withValues(alpha: 0.08),
+                ],
+              ),
               shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.secondary.withValues(alpha: 0.5),
+                width: 1.5,
+              ),
             ),
             child: Center(
-              child: PhosphorIcon(icon, size: 64, color: colorScheme.secondary),
+              child: PhosphorIcon(icon, size: 70, color: AppColors.secondary),
             ),
           ),
 
           const SizedBox(height: AppSpacing.xl),
 
-          // Title
           Text(
             title,
-            style: textTheme.headlineMedium?.copyWith(
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.w700,
-              color: colorScheme.primary,
+              color: Colors.white,
+              height: 1.2,
             ),
             textAlign: TextAlign.center,
           ),
 
           const SizedBox(height: AppSpacing.md),
 
-          // Description
           Text(
             description,
-            style: textTheme.bodyLarge?.copyWith(
-              color: AppColors.textSecondary,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Colors.white.withValues(alpha: 0.85),
               height: 1.6,
             ),
             textAlign: TextAlign.center,

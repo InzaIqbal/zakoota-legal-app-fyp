@@ -1,53 +1,206 @@
+// Firestore Security Rules for ZAKOOTA - FINAL VERSION
+// Copy this entire content to Firebase Console > Firestore > Rules
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // USERS COLLECTION
+    // ========== USERS COLLECTION ==========
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+      // Allow self-update or specific field increments (e.g., reviewsCount)
+      allow write: if request.auth != null && (
+        request.auth.uid == userId ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewsCount', 'lastActivity']))
+      );
     }
     match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // CASES COLLECTION
+    // ========== LAWYERS COLLECTION ==========
+    // Allow authenticated users to read lawyer profiles (required for doc.exists checks and profile viewing)
+    match /lawyers/{lawyerId} {
+      allow read: if request.auth != null;
+      // Only the lawyer can write to their own profile
+      allow write: if request.auth != null && request.auth.uid == lawyerId;
+    }
+    
+    // ========== CASES COLLECTION ==========
     match /cases/{caseId} {
-      // 1. CREATE
       allow create: if request.auth != null; 
 
-      // 2. READ
       allow read: if request.auth != null && (
         resource.data.clientId == request.auth.uid || 
-        resource.data.status == 'open'
+        resource.data.status == 'open' ||
+        resource.data.acceptedLawyerId == request.auth.uid ||
+        caseId == 'standalone'
       );
 
-      // 3. UPDATE main document
-      // Allow lawyers to increment proposalCount & update lastActivity
       allow update: if request.auth != null && (
+        // Client can update everything in their case
         resource.data.clientId == request.auth.uid || 
+        // Accepted lawyer can signal work done
+        (resource.data.acceptedLawyerId == request.auth.uid && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['workCompletionStatus', 'lastActivity'])) ||
+        // Other lawyers can increment proposalCount
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['proposalCount', 'lastActivity'])
       );
       
-      // 4. HISTORY SUB-COLLECTION
       match /history/{historyId} {
-        allow read, write: if request.auth != null && 
-          get(/databases/$(database)/documents/cases/$(caseId)).data.clientId == request.auth.uid;
+        allow read, write: if request.auth != null && (
+          caseId != 'standalone' && 
+          get(/databases/$(database)/documents/cases/$(caseId)).data.clientId == request.auth.uid
+        );
       }
       
-      // 5. PROPOSALS SUB-COLLECTION
       match /proposals/{proposalId} {
-        // Allow creating a proposal if authenticated
         allow create: if request.auth != null;
-        
-        // Allow reading proposals
         allow read: if request.auth != null;
-
-        // Allow updating only if the user is the author
-        allow update: if request.auth != null && resource.data.lawyerId == request.auth.uid;
-        
-        // Allow deleting only if the user is the author
+        allow update: if request.auth != null && (
+          resource.data.lawyerId == request.auth.uid || 
+          (caseId != 'standalone' && get(/databases/$(database)/documents/cases/$(caseId)).data.clientId == request.auth.uid)
+        );
         allow delete: if request.auth != null && resource.data.lawyerId == request.auth.uid;
       }
+
+      match /consultations/{consultationId} {
+        allow read: if request.auth != null && (
+          (caseId == 'standalone' && (resource.data.requesterId == request.auth.uid || resource.data.targetId == request.auth.uid)) ||
+          (caseId != 'standalone' && (
+            get(/databases/$(database)/documents/cases/$(caseId)).data.clientId == request.auth.uid || 
+            get(/databases/$(database)/documents/cases/$(caseId)).data.acceptedLawyerId == request.auth.uid
+          ))
+        );
+        
+        allow write: if request.auth != null && (
+          (caseId == 'standalone' && (
+            request.resource.data.requesterId == request.auth.uid || 
+            request.resource.data.targetId == request.auth.uid || 
+            (resource != null && (resource.data.requesterId == request.auth.uid || resource.data.targetId == request.auth.uid))
+          )) ||
+          (caseId != 'standalone' && (
+            get(/databases/$(database)/documents/cases/$(caseId)).data.clientId == request.auth.uid || 
+            get(/databases/$(database)/documents/cases/$(caseId)).data.acceptedLawyerId == request.auth.uid
+          ))
+        );
+      }
+
+      match /files/{fileId} {
+        allow read, write: if request.auth != null && (
+          caseId != 'standalone' && (
+            get(/databases/$(database)/documents/cases/$(caseId)).data.clientId == request.auth.uid || 
+            get(/databases/$(database)/documents/cases/$(caseId)).data.acceptedLawyerId == request.auth.uid
+          )
+        );
+      }
+
+      match /milestones/{milestoneId} {
+        allow read, write: if request.auth != null && (
+          caseId != 'standalone' && (
+            get(/databases/$(database)/documents/cases/$(caseId)).data.clientId == request.auth.uid ||
+            get(/databases/$(database)/documents/cases/$(caseId)).data.acceptedLawyerId == request.auth.uid
+          )
+        );
+      }
+
+      match /invoices/{invoiceId} {
+        allow read, write: if request.auth != null && (
+          caseId != 'standalone' && (
+            get(/databases/$(database)/documents/cases/$(caseId)).data.clientId == request.auth.uid ||
+            get(/databases/$(database)/documents/cases/$(caseId)).data.acceptedLawyerId == request.auth.uid
+          )
+        );
+      }
+    }
+
+    // ========== REVIEWS COLLECTION ==========
+    match /reviews/{reviewId} {
+      allow create: if request.auth != null && request.resource.data.clientId == request.auth.uid;
+      allow read: if request.auth != null;
+    }
+
+    // ========== CHATS COLLECTION ==========
+    match /chats/{chatId} {
+      allow read: if request.auth != null && (
+        request.auth.uid in resource.data.participants ||
+        resource.data.clientId == request.auth.uid ||
+        resource.data.lawyerId == request.auth.uid
+      );
+      allow create: if request.auth != null && (
+        request.resource.data.clientId == request.auth.uid ||
+        request.resource.data.lawyerId == request.auth.uid
+      );
+      allow update: if request.auth != null && (
+        request.auth.uid in resource.data.participants ||
+        resource.data.clientId == request.auth.uid ||
+        resource.data.lawyerId == request.auth.uid
+      );
+      
+      match /messages/{messageId} {
+        allow read: if request.auth != null && (
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants ||
+          get(/databases/$(database)/documents/chats/$(chatId)).data.clientId == request.auth.uid ||
+          get(/databases/$(database)/documents/chats/$(chatId)).data.lawyerId == request.auth.uid
+        );
+        allow create: if request.auth != null && request.auth.uid == request.resource.data.senderId;
+        allow update: if request.auth != null && (
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants ||
+          get(/databases/$(database)/documents/chats/$(chatId)).data.clientId == request.auth.uid ||
+          get(/databases/$(database)/documents/chats/$(chatId)).data.lawyerId == request.auth.uid
+        );
+      }
+    }
+
+    // ========== COLLECTION GROUP: CONSULTATIONS ==========
+    match /{path=**}/consultations/{consultationId} {
+      allow read: if request.auth != null && (
+        resource.data.requesterId == request.auth.uid || 
+        resource.data.targetId == request.auth.uid
+      );
+    }
+
+    // ========== EVENTS COLLECTION (GLOBAL SINGLE-TENANT INDEX) ==========
+    match /events/{eventId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.participants;
+      allow write: if request.auth != null;
+    }
+
+    // ========== LAWYER ADS COLLECTION ==========
+    match /lawyer_ads/{adId} {
+      // Authenticated users can read only active ads, owners can always read their own ads
+      allow read: if request.auth != null && (
+        resource.data.isActive == true ||
+        request.auth.uid == resource.data.lawyerId
+      );
+
+      // Lawyer can create ad only for self
+      allow create: if request.auth != null && request.resource.data.lawyerId == request.auth.uid;
+
+      // Lawyer owner can update/delete own ad
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.lawyerId;
+    }
+
+    match /ad_bookings/{bookingId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.clientId ||
+        request.auth.uid == resource.data.lawyerId
+      );
+
+      allow create: if request.auth != null && request.resource.data.clientId == request.auth.uid;
+
+      allow update: if request.auth != null && (
+        request.auth.uid == resource.data.clientId ||
+        request.auth.uid == resource.data.lawyerId
+      );
+
+      allow delete: if false;
+    }
+
+    // ========== DENY ALL OTHER ACCESS ==========
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

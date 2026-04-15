@@ -11,6 +11,7 @@ plugins {
 android {
     namespace = "com.example.zakoota"
     compileSdk = flutter.compileSdkVersion
+    buildToolsVersion = "34.0.0"
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

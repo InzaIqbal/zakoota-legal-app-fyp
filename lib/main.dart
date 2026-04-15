@@ -45,7 +45,7 @@ class ZakootaApp extends StatelessWidget {
       // Theme Configuration
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.light,
+      themeMode: ThemeMode.system,
 
       // Router Configuration
       routerConfig: appRouter,

@@ -315,7 +315,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                             borderRadius: BorderRadius.circular(AppRadius.full),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),
@@ -335,7 +335,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                                     hintText: 'Search jobs...',
                                     hintStyle: TextStyle(
                                         color: AppColors.textSecondary
-                                            .withOpacity(0.6)),
+                                            .withValues(alpha: 0.6)),
                                     border: InputBorder.none,
                                     isDense: true,
                                     contentPadding: EdgeInsets.zero,

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_constants.dart';
 
@@ -53,7 +53,7 @@ class LawyerWelcomeScreen extends StatelessWidget {
               Text(
                 'Connect with clients, manage cases, and track earnings in one place.',
                 style: textTheme.bodyLarge?.copyWith(
-                  color: AppColors.textOnPrimary.withOpacity(0.8),
+                  color: AppColors.textOnPrimary.withValues(alpha: 0.8),
                 ),
                 textAlign: TextAlign.center,
               ),

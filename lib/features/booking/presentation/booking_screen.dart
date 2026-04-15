@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../lawyers/data/lawyer_mock_data.dart';
+import '../../lawyers/services/lawyer_service.dart';
 
 /// Booking Screen - Select date and time for consultation
 class BookingScreen extends StatefulWidget {
@@ -20,6 +21,11 @@ class BookingScreen extends StatefulWidget {
 class _BookingScreenState extends State<BookingScreen> {
   DateTime? _selectedDate;
   String? _selectedTimeSlot;
+
+  LawyerProfile? _lawyer;
+  bool _isLoading = true;
+  String _meetingType = 'online';
+  final _topicController = TextEditingController();
 
   // Mock available dates (next 7 days)
   final List<DateTime> _availableDates = List.generate(
@@ -43,13 +49,52 @@ class _BookingScreenState extends State<BookingScreen> {
   final List<String> _unavailableSlots = ['11:00 AM', '03:00 PM'];
 
   @override
+  void initState() {
+    super.initState();
+    _loadLawyer();
+  }
+
+  Future<void> _loadLawyer() async {
+    try {
+      final lawyer = await LawyerService().getLawyerById(widget.lawyerId);
+      if (mounted) {
+        setState(() {
+          _lawyer = lawyer;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _topicController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final lawyer = LawyerMockData.getLawyerById(widget.lawyerId);
+
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final lawyer = _lawyer;
 
     if (lawyer == null) {
-      return Scaffold(
+      return const Scaffold(
+        backgroundColor: AppColors.background,
         body: Center(child: Text('Lawyer not found')),
       );
     }
@@ -110,7 +155,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                 ),
                               ),
                               Text(
-                                lawyer.specializations.first,
+                                lawyer.specializations.isNotEmpty ? lawyer.specializations.first : 'Lawyer Focus',
                                 style: textTheme.bodySmall?.copyWith(
                                   color: AppColors.textSecondary,
                                 ),
@@ -127,6 +172,69 @@ class _BookingScreenState extends State<BookingScreen> {
                         ),
                       ],
                     ),
+                  ),
+
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // Consultation Topic
+                  Text(
+                    'Topic / Brief Description',
+                    style: textTheme.titleMedium?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  TextField(
+                    controller: _topicController,
+                    decoration: InputDecoration(
+                      hintText: 'What is this consultation about?',
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        borderSide: const BorderSide(color: AppColors.grey300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        borderSide: const BorderSide(color: AppColors.grey300),
+                      ),
+                    ),
+                    maxLines: 2,
+                    onChanged: (v) => setState(() {}),
+                  ),
+
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // Meeting Type
+                  Text(
+                    'Meeting Preference',
+                    style: textTheme.titleMedium?.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MeetingTypeButton(
+                          title: 'Video Call',
+                          icon: PhosphorIconsRegular.videoCamera,
+                          isSelected: _meetingType == 'online',
+                          onTap: () => setState(() => _meetingType = 'online'),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: _MeetingTypeButton(
+                          title: 'In-Person',
+                          icon: PhosphorIconsRegular.users,
+                          isSelected: _meetingType == 'in_person',
+                          onTap: () => setState(() => _meetingType = 'in_person'),
+                        ),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: AppSpacing.xl),
@@ -313,7 +421,7 @@ class _BookingScreenState extends State<BookingScreen> {
               color: AppColors.surface,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, -2),
                 ),
@@ -345,20 +453,26 @@ class _BookingScreenState extends State<BookingScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed:
-                          _selectedDate != null && _selectedTimeSlot != null
-                              ? () {
-                                  context.push(
-                                    '/booking-summary',
-                                    extra: {
-                                      'lawyerId': widget.lawyerId,
-                                      'date': _selectedDate,
-                                      'time': _selectedTimeSlot,
-                                      'price': lawyer.pricePerConsultation,
-                                    },
-                                  );
-                                }
-                              : null,
+                      onPressed: _selectedDate != null &&
+                              _selectedTimeSlot != null &&
+                              _topicController.text.trim().isNotEmpty
+                          ? () {
+                              context.push(
+                                '/booking-summary',
+                                extra: {
+                                  'lawyerId': widget.lawyerId,
+                                  'lawyerName': lawyer.name,
+                                  'lawyerAvatar': lawyer.photoUrl,
+                                  'lawyerSpecialization': lawyer.specializations.isNotEmpty ? lawyer.specializations.first : 'Lawyer Focus',
+                                  'date': _selectedDate,
+                                  'time': _selectedTimeSlot,
+                                  'price': lawyer.pricePerConsultation,
+                                  'topic': _topicController.text.trim(),
+                                  'meetingType': _meetingType,
+                                },
+                              );
+                            }
+                          : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -400,5 +514,57 @@ class _BookingScreenState extends State<BookingScreen> {
       'Dec'
     ];
     return months[date.month - 1];
+  }
+}
+
+/// Meeting Type Button Widget
+class _MeetingTypeButton extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _MeetingTypeButton({
+    required this.title,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.secondary.withValues(alpha: 0.1) : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(
+            color: isSelected ? AppColors.secondary : AppColors.grey300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            PhosphorIcon(
+              icon as PhosphorIconData,
+              color: isSelected ? AppColors.secondary : AppColors.textSecondary,
+              size: 28,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              title,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: isSelected ? AppColors.secondary : AppColors.textPrimary,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

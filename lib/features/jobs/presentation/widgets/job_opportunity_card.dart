@@ -25,7 +25,7 @@ class JobOpportunityCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -43,7 +43,7 @@ class JobOpportunityCard extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: isHighBudget
-                  ? AppColors.secondary.withOpacity(0.1)
+                  ? AppColors.secondary.withValues(alpha: 0.1)
                   : AppColors.grey100,
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(AppRadius.lg),
@@ -254,12 +254,12 @@ class _TagChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: isHighlight
-            ? AppColors.primary.withOpacity(0.05)
+            ? AppColors.primary.withValues(alpha: 0.05)
             : AppColors.background,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
           color: isHighlight
-              ? AppColors.primary.withOpacity(0.2)
+              ? AppColors.primary.withValues(alpha: 0.2)
               : AppColors.grey200,
         ),
       ),

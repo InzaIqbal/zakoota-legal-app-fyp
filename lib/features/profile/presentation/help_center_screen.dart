@@ -44,11 +44,7 @@ class HelpCenterScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.primary, Color(0xFF1E293B)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: AppColors.primary,
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                 ),
                 child: Row(
@@ -68,7 +64,7 @@ class HelpCenterScreen extends StatelessWidget {
                           Text(
                             'Our support team is available 24/7 to help you.',
                             style: TextStyle(
-                                color: Colors.white.withOpacity(0.8),
+                                color: Colors.white.withValues(alpha: 0.8),
                                 fontSize: 13),
                           ),
                           const SizedBox(height: 16),

@@ -57,67 +57,100 @@ class _SplashScreenState extends State<SplashScreen> {
     final textTheme = theme.textTheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.primary,
-      body: Center(
-        child: AnimatedOpacity(
-          opacity: _opacity,
-          duration: const Duration(milliseconds: 1500),
-          curve: Curves.easeInOut,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // App Logo
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: colorScheme.secondary,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colorScheme.secondary.withOpacity(0.3),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          Center(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.8, end: 1.0),
+              duration: const Duration(seconds: 1),
+              curve: Curves.elasticOut,
+              builder: (context, scale, child) {
+                return Transform.scale(
+                  scale: scale,
+                  child: AnimatedOpacity(
+                    opacity: _opacity,
+                    duration: const Duration(milliseconds: 800),
+                    curve: Curves.easeIn,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // App Logo
+                        Image.asset(
+                          'assets/images/logo_white.png',
+                          width: 110,
+                          height: 110,
+                          fit: BoxFit.contain,
+                        ),
+                        const SizedBox(height: AppSpacing.xl + 10),
+                        Text(
+                          'ZAKOOTA',
+                          style: textTheme.displaySmall?.copyWith(
+                            color: AppColors.primary,
+                            letterSpacing: 6,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'LEGAL SERVICES MARKETPLACE',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                            letterSpacing: 2.0,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          // More "Creative" Loading Animation
+          Positioned(
+            bottom: 100,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: SizedBox(
+                width: 50,
+                height: 50,
+                child: Stack(
+                  children: [
+                    const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    Center(
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: const Duration(milliseconds: 1500),
+                        curve: Curves.linear,
+                        builder: (context, value, child) {
+                          return Transform.rotate(
+                            angle: value * 2 * 3.14159,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(bottom: 40),
+                              decoration: const BoxDecoration(
+                                color: AppColors.secondary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),
-                child: Center(
-                  child: Text(
-                    'Z',
-                    style: textTheme.displayLarge?.copyWith(
-                      color: colorScheme.primary,
-                      fontSize: 64,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
               ),
-
-              const SizedBox(height: AppSpacing.lg),
-
-              // App Name
-              Text(
-                'ZAKOOTA',
-                style: textTheme.displaySmall?.copyWith(
-                  color: Colors.white,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-
-              const SizedBox(height: AppSpacing.sm),
-
-              // Tagline
-              Text(
-                'Legal Services Marketplace',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withOpacity(0.8),
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

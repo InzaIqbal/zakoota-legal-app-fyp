@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
@@ -23,7 +24,8 @@ class CaseDetailsScreen extends StatefulWidget {
 class _CaseDetailsScreenState extends State<CaseDetailsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  late Map<String, dynamic> caseData;
+  Map<String, dynamic> caseData = {};
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -33,7 +35,119 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
       vsync: this,
       initialIndex: widget.initialTabIndex,
     );
-    caseData = CaseDetailsMockData.getCaseDetails(widget.caseId);
+    _loadCaseData();
+  }
+
+  Future<void> _loadCaseData() async {
+    final mock = CaseDetailsMockData.getCaseDetails(widget.caseId);
+    if (mock.isNotEmpty) {
+      if (!mounted) return;
+      setState(() {
+        caseData = mock;
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final caseDoc = await FirebaseFirestore.instance
+          .collection('cases')
+          .doc(widget.caseId)
+          .get();
+
+      if (!caseDoc.exists) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final data = caseDoc.data() ?? <String, dynamic>{};
+      final createdAt = (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+      final acceptedLawyerId = data['acceptedLawyerId'] as String?;
+
+      String lawyerName = 'Not assigned yet';
+      String lawyerAvatar = 'https://api.dicebear.com/7.x/avataaars/png?seed=Lawyer';
+
+      if (acceptedLawyerId != null && acceptedLawyerId.isNotEmpty) {
+        final lawyerDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(acceptedLawyerId)
+            .get();
+        if (lawyerDoc.exists) {
+          final lawyerData = lawyerDoc.data() ?? <String, dynamic>{};
+          lawyerName = (lawyerData['fullName'] ?? 'Assigned Lawyer').toString();
+          lawyerAvatar = (lawyerData['photoUrl'] ?? lawyerAvatar).toString();
+        }
+      }
+
+      final attachments = (data['attachments'] as List<dynamic>? ?? []);
+      final documents = attachments.map((item) {
+        final doc = item as Map<String, dynamic>;
+        return {
+          'name': (doc['title'] ?? 'Untitled Document').toString(),
+          'size': 'Unknown size',
+          'uploadedDate': createdAt,
+        };
+      }).toList();
+
+      final status = (data['status'] ?? 'open').toString();
+      final timeline = [
+        {
+          'title': 'Case Created',
+          'description': 'Your case was posted successfully.',
+          'date': createdAt,
+          'isCompleted': true,
+          'isCurrent': false,
+        },
+        {
+          'title': 'Proposal Collection',
+          'description': 'Lawyers can submit proposals for your case.',
+          'date': null,
+          'isCompleted': (data['proposalCount'] ?? 0) > 0,
+          'isCurrent': (data['proposalCount'] ?? 0) == 0,
+        },
+        {
+          'title': 'Case Processing',
+          'description': 'Case is currently $status.',
+          'date': null,
+          'isCompleted': status == 'closed',
+          'isCurrent': status == 'active' || status == 'open',
+        },
+      ];
+
+      final mapped = {
+        'id': widget.caseId,
+        'title': (data['title'] ?? 'Untitled Case').toString(),
+        'status': status,
+        'filedDate': createdAt,
+        'nextHearing': {
+          'date': createdAt.add(const Duration(days: 7)),
+          'time': '10:00 AM',
+          'venue': 'Court to be assigned',
+          'room': 'N/A',
+        },
+        'lawyerAvatar': lawyerAvatar,
+        'lawyerName': lawyerName,
+        'lawyerId': acceptedLawyerId ?? '',
+        'category': (data['category'] ?? 'General').toString(),
+        'description': (data['description'] ?? 'No description available').toString(),
+        'timeline': timeline,
+        'documents': documents,
+      };
+
+      if (!mounted) return;
+      setState(() {
+        caseData = mapped;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -46,6 +160,12 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     if (caseData.isEmpty) {
       return Scaffold(
@@ -71,7 +191,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
               floating: true,
               expandedHeight: 120,
               leading: IconButton(
-                icon: PhosphorIcon(PhosphorIconsRegular.arrowLeft),
+                icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft),
                 onPressed: () => context.pop(),
               ),
               flexibleSpace: FlexibleSpaceBar(
@@ -93,7 +213,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                 indicatorColor: AppColors.secondary,
                 indicatorWeight: 3,
                 labelColor: Colors.white,
-                unselectedLabelColor: Colors.white.withOpacity(0.6),
+                unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
                 labelStyle: textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -133,12 +253,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.primary,
-                  AppColors.primary.withOpacity(0.8),
-                ],
-              ),
+              color: AppColors.primary,
               borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             child: Column(
@@ -173,7 +288,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                 Text(
                   'Filed on ${DateFormat('MMM dd, yyyy').format(caseData['filedDate'])}',
                   style: textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withValues(alpha: 0.8),
                   ),
                 ),
               ],
@@ -201,7 +316,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                 children: [
                   Row(
                     children: [
-                      PhosphorIcon(
+                      const PhosphorIcon(
                         PhosphorIconsFill.calendarCheck,
                         color: AppColors.error,
                         size: 24,
@@ -219,7 +334,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                   const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
-                      PhosphorIcon(
+                      const PhosphorIcon(
                         PhosphorIconsRegular.clock,
                         size: 16,
                         color: AppColors.textSecondary,
@@ -236,7 +351,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      PhosphorIcon(
+                      const PhosphorIcon(
                         PhosphorIconsRegular.mapPin,
                         size: 16,
                         color: AppColors.textSecondary,
@@ -258,7 +373,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                         ),
                       );
                     },
-                    icon: PhosphorIcon(
+                    icon: const PhosphorIcon(
                       PhosphorIconsRegular.calendarPlus,
                       size: 18,
                     ),
@@ -306,17 +421,28 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
               ),
               trailing: OutlinedButton.icon(
                 onPressed: () {
+                  final lawyerId = (caseData['lawyerId'] ?? '').toString();
+                  if (lawyerId.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No lawyer assigned yet'),
+                        backgroundColor: AppColors.warning,
+                      ),
+                    );
+                    return;
+                  }
+
                   context.push(
-                    '/chat/${caseData['lawyerId']}',
+                    '/chat/$lawyerId',
                     extra: {
                       'lawyerName': caseData['lawyerName'],
-                      'lawyerId': caseData['lawyerId'],
+                      'lawyerId': lawyerId,
                       'isOnline': true,
                       'lawyerAvatar': caseData['lawyerAvatar'],
                     },
                   );
                 },
-                icon: PhosphorIcon(
+                icon: const PhosphorIcon(
                   PhosphorIconsRegular.chatCircleText,
                   size: 16,
                 ),
@@ -417,10 +543,10 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
             leading: Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
-              child: PhosphorIcon(
+              child: const PhosphorIcon(
                 PhosphorIconsFill.filePdf,
                 color: AppColors.error,
                 size: 24,
@@ -437,7 +563,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
               style: textTheme.bodySmall,
             ),
             trailing: IconButton(
-              icon: PhosphorIcon(
+              icon: const PhosphorIcon(
                 PhosphorIconsRegular.downloadSimple,
                 color: AppColors.primary,
               ),
@@ -516,7 +642,7 @@ class _TimelineStep extends StatelessWidget {
                 ),
                 child: Center(
                   child: isCompleted
-                      ? PhosphorIcon(
+                      ? const PhosphorIcon(
                           PhosphorIconsFill.check,
                           size: 16,
                           color: Colors.white,
@@ -554,7 +680,7 @@ class _TimelineStep extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
                 color: isCurrent
-                    ? AppColors.secondary.withOpacity(0.1)
+                    ? AppColors.secondary.withValues(alpha: 0.1)
                     : AppColors.surface,
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 border: Border.all(
@@ -610,7 +736,7 @@ class _TimelineStep extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        PhosphorIcon(
+                        const PhosphorIcon(
                           PhosphorIconsRegular.calendar,
                           size: 14,
                           color: AppColors.textLight,

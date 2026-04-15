@@ -1,6 +1,4 @@
-﻿import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -76,6 +74,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     try {
       // Fetch current lawyer data for name/image/rating
       final lawyerData = await _authService.getUserData(user.uid);
+      if (!mounted) return;
+      
       final lawyerName = lawyerData?['fullName'] ?? 'Lawyer';
       final lawyerImage = lawyerData?['photoUrl'] ??
           'https://api.dicebear.com/7.x/avataaars/png?seed=${user.uid}';
@@ -93,6 +93,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
         bidAmount: double.tryParse(_bidController.text) ?? 0.0,
         duration: _durationController.text,
       );
+      
+      if (!mounted) return;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -329,9 +331,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
+                color: AppColors.success.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.success.withOpacity(0.3)),
+                border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
               ),
               child: Column(
                 children: [
@@ -544,6 +546,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     if (confirm == true) {
       try {
         await _proposalService.deleteProposal(widget.job.id, proposal.id);
+        if (!mounted) return;
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(const SnackBar(content: Text('Proposal deleted')));
@@ -637,9 +640,9 @@ class _InfoChip extends StatelessWidget {
         vertical: 4,
       ),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Text(
         label,

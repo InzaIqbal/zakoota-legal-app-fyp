@@ -20,10 +20,10 @@ class VerificationPendingScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.xxl),
                 decoration: BoxDecoration(
-                  color: AppColors.warning.withOpacity(0.1),
+                  color: AppColors.warning.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: PhosphorIcon(
+                child: const PhosphorIcon(
                   PhosphorIconsRegular.hourglass,
                   size: 64,
                   color: AppColors.warning,
@@ -63,20 +63,20 @@ class VerificationPendingScreen extends StatelessWidget {
                           ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    Row(
+                    const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.email_outlined, size: 16),
-                        const SizedBox(width: AppSpacing.xs),
+                        Icon(Icons.email_outlined, size: 16),
+                        SizedBox(width: AppSpacing.xs),
                         Text('support@zakoota.com'),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    Row(
+                    const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.phone_outlined, size: 16),
-                        const SizedBox(width: AppSpacing.xs),
+                        Icon(Icons.phone_outlined, size: 16),
+                        SizedBox(width: AppSpacing.xs),
                         Text('+92 123 4567890'),
                       ],
                     ),

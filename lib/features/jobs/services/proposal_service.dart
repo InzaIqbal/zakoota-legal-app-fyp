@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/proposal.dart';
+import '../../notifications/models/notification_model.dart';
+import '../../notifications/services/notification_service.dart';
 
 class ProposalService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final NotificationService _notificationService = NotificationService();
 
   // Submit a Proposal
   Future<void> submitProposal({
@@ -56,6 +59,34 @@ class ProposalService {
     });
 
     await batch.commit();
+
+    final caseDoc = await _firestore.collection('cases').doc(caseId).get();
+    final clientId = caseDoc.data()?['clientId'] as String?;
+    if (clientId != null && clientId.isNotEmpty) {
+      await _notificationService.createForUser(
+        userId: clientId,
+        actorId: lawyerId,
+        type: NotificationType.proposalReceived,
+        title: 'New proposal received',
+        message: '$lawyerName submitted a proposal on your case.',
+        referenceType: 'case',
+        referenceId: caseId,
+        route: '/case-details/$caseId',
+        payload: {'caseId': caseId, 'lawyerId': lawyerId},
+      );
+    }
+
+    await _notificationService.createForUser(
+      userId: lawyerId,
+      actorId: lawyerId,
+      type: NotificationType.proposalSubmitted,
+      title: 'Proposal submitted',
+      message: 'Your proposal was sent successfully.',
+      referenceType: 'case',
+      referenceId: caseId,
+      route: '/case-details/$caseId',
+      payload: {'caseId': caseId},
+    );
   }
 
   // Delete a Proposal
@@ -100,18 +131,158 @@ class ProposalService {
     });
   }
 
-  // Get Proposals for a Case (Stream)
+  // Get Proposals for a Case (Stream) with Sorting
   Stream<List<Proposal>> getProposalsForCase(String caseId) {
     return _firestore
         .collection('cases')
         .doc(caseId)
         .collection('proposals')
-        .orderBy('createdAt', descending: true) // Newest first
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
+      final proposals = snapshot.docs.map((doc) {
         return Proposal.fromMap(doc.data(), doc.id);
       }).toList();
+
+      // Custom Sort: Accepted > Pending > Rejected, then by Date (Newest first)
+      proposals.sort((a, b) {
+        // 1. Status Priority
+        final statusPriorityA = _getStatusPriority(a.status);
+        final statusPriorityB = _getStatusPriority(b.status);
+
+        if (statusPriorityA != statusPriorityB) {
+          return statusPriorityA.compareTo(statusPriorityB);
+        }
+
+        // 2. Date Priority (Newest first)
+        return b.createdAt.compareTo(a.createdAt);
+      });
+
+      return proposals;
     });
+  }
+
+  int _getStatusPriority(String status) {
+    switch (status) {
+      case 'accepted':
+        return 0; // Top
+      case 'pending':
+        return 1; // Middle
+      case 'rejected':
+        return 2; // Bottom
+      default:
+        return 3;
+    }
+  }
+
+  // Accept a Proposal (and reject others)
+  Future<void> acceptProposal(String caseId, String proposalId) async {
+    final batch = _firestore.batch();
+    final proposalsRef =
+        _firestore.collection('cases').doc(caseId).collection('proposals');
+
+    // 1. Get all proposals for this case
+    final querySnapshot = await proposalsRef.get();
+    
+    // Get the accepted proposal data to extract lawyer's budget
+    Proposal? acceptedProposal;
+    for (var doc in querySnapshot.docs) {
+      if (doc.id == proposalId) {
+        acceptedProposal = Proposal.fromMap(doc.data(), doc.id);
+        break;
+      }
+    }
+
+    for (var doc in querySnapshot.docs) {
+      if (doc.id == proposalId) {
+        // Accept the target proposal
+        batch.update(doc.reference, {'status': 'accepted'});
+      } else {
+        // Reject all other proposals
+        batch.update(doc.reference, {'status': 'rejected'});
+      }
+    }
+
+    // 2. Update Case status, acceptedLawyerId, and lawyer's agreed budget
+    final caseRef = _firestore.collection('cases').doc(caseId);
+    batch.update(caseRef, {
+      'status': 'active', // Changed from 'open' to 'active'
+      'acceptedLawyerId': _getLawyerIdFromProposal(querySnapshot, proposalId),
+      'agreedBudget': acceptedProposal?.bidAmount ?? 0.0, // Store lawyer's agreed budget
+      'budgetSource': 'lawyer', // Mark that budget is from lawyer's proposal, not client
+    });
+
+    await batch.commit();
+
+    final caseDoc = await _firestore.collection('cases').doc(caseId).get();
+    final clientId = caseDoc.data()?['clientId'] as String?;
+    final acceptedLawyerId = caseDoc.data()?['acceptedLawyerId'] as String?;
+
+    if (acceptedLawyerId != null && acceptedLawyerId.isNotEmpty) {
+      await _notificationService.createForUser(
+        userId: acceptedLawyerId,
+        actorId: clientId,
+        type: NotificationType.proposalAccepted,
+        title: 'Proposal accepted',
+        message: 'Your proposal has been accepted. Case is now active.',
+        referenceType: 'case',
+        referenceId: caseId,
+        route: '/case-details/$caseId',
+        payload: {'caseId': caseId},
+      );
+    }
+  }
+
+  String _getLawyerIdFromProposal(QuerySnapshot snapshot, String proposalId) {
+    try {
+      final doc = snapshot.docs.firstWhere((doc) => doc.id == proposalId);
+      return doc['lawyerId'] as String;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // Reject a Proposal
+  Future<void> rejectProposal(String caseId, String proposalId) async {
+    final proposalDoc = await _firestore
+        .collection('cases')
+        .doc(caseId)
+        .collection('proposals')
+        .doc(proposalId)
+        .get();
+
+    await _firestore
+        .collection('cases')
+        .doc(caseId)
+        .collection('proposals')
+        .doc(proposalId)
+        .update({'status': 'rejected'});
+
+    final lawyerId = proposalDoc.data()?['lawyerId'] as String?;
+    final clientId = (await _firestore.collection('cases').doc(caseId).get())
+        .data()?['clientId'] as String?;
+
+    if (lawyerId != null && lawyerId.isNotEmpty) {
+      await _notificationService.createForUser(
+        userId: lawyerId,
+        actorId: clientId,
+        type: NotificationType.proposalRejected,
+        title: 'Proposal not selected',
+        message: 'Your proposal was not selected for this case.',
+        referenceType: 'case',
+        referenceId: caseId,
+        route: '/case-details/$caseId',
+        payload: {'caseId': caseId},
+      );
+    }
+  }
+
+  // Un-reject a Proposal (Undo Rejection)
+  Future<void> unrejectProposal(String caseId, String proposalId) async {
+    await _firestore
+        .collection('cases')
+        .doc(caseId)
+        .collection('proposals')
+        .doc(proposalId)
+        .update({'status': 'pending'});
   }
 }

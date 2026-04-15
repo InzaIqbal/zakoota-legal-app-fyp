@@ -45,6 +45,11 @@ class CaseModel {
   final bool isAdVisible;
   final int viewsCount;
   final int savesCount;
+  final String? acceptedLawyerId; // New field
+  final double? agreedBudget; // Lawyer's agreed budget from accepted proposal
+  final String? budgetSource; // 'client' or 'lawyer' - indicates which budget is active
+  final String? workCompletionStatus; // null, 'lawyer_signalled', 'client_accepted', 'client_rejected'
+  final DateTime? completedAt;
 
   CaseModel({
     required this.caseId,
@@ -63,6 +68,11 @@ class CaseModel {
     this.isAdVisible = true,
     this.viewsCount = 0,
     this.savesCount = 0,
+    this.acceptedLawyerId,
+    this.agreedBudget,
+    this.budgetSource,
+    this.workCompletionStatus,
+    this.completedAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -83,6 +93,11 @@ class CaseModel {
       'isAdVisible': isAdVisible,
       'viewsCount': viewsCount,
       'savesCount': savesCount,
+      'acceptedLawyerId': acceptedLawyerId,
+      'agreedBudget': agreedBudget,
+      'budgetSource': budgetSource,
+      'workCompletionStatus': workCompletionStatus,
+      'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
     };
   }
 
@@ -107,6 +122,44 @@ class CaseModel {
       isAdVisible: map['isAdVisible'] ?? true,
       viewsCount: map['viewsCount'] ?? 0,
       savesCount: map['savesCount'] ?? 0,
+      acceptedLawyerId: map['acceptedLawyerId'],
+      agreedBudget: map['agreedBudget'] != null ? (map['agreedBudget'] as num).toDouble() : null,
+      budgetSource: map['budgetSource'],
+      workCompletionStatus: map['workCompletionStatus'],
+      completedAt: (map['completedAt'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  CaseModel copyWith({
+    String? status,
+    String? workCompletionStatus,
+    DateTime? completedAt,
+    String? acceptedLawyerId,
+    double? agreedBudget,
+    String? budgetSource,
+  }) {
+    return CaseModel(
+      caseId: caseId,
+      clientId: clientId,
+      title: title,
+      description: description,
+      category: category,
+      city: city,
+      budgetMin: budgetMin,
+      budgetMax: budgetMax,
+      meetingPreference: meetingPreference,
+      attachments: attachments,
+      status: status ?? this.status,
+      proposalCount: proposalCount,
+      createdAt: createdAt,
+      isAdVisible: isAdVisible,
+      viewsCount: viewsCount,
+      savesCount: savesCount,
+      acceptedLawyerId: acceptedLawyerId ?? this.acceptedLawyerId,
+      agreedBudget: agreedBudget ?? this.agreedBudget,
+      budgetSource: budgetSource ?? this.budgetSource,
+      workCompletionStatus: workCompletionStatus ?? this.workCompletionStatus,
+      completedAt: completedAt ?? this.completedAt,
     );
   }
 }

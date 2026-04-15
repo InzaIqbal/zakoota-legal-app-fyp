@@ -3,9 +3,12 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../core/constants/app_constants.dart';
 
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../ads/services/lawyer_ad_service.dart';
 
-import 'package:cloud_firestore/cloud_firestore.dart'; // Added
+import 'package:cloud_firestore/cloud_firestore.dart'; 
+import '../../../core/widgets/user_avatar.dart';
 
 class LawyerProfileScreen extends StatefulWidget {
   const LawyerProfileScreen({super.key});
@@ -16,7 +19,100 @@ class LawyerProfileScreen extends StatefulWidget {
 
 class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
   final AuthService _authService = AuthService();
-  bool _isAcceptingCase = true; // Default
+  final LawyerAdService _lawyerAdService = LawyerAdService();
+  bool _isAcceptingCase = true;
+  bool _isAvailabilityUpdating = false;
+
+  // Pre-fetched initial values so the avatar shows immediately
+  String? _cachedPhotoUrl;
+  String _cachedName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _prefetchProfile();
+  }
+
+  Future<void> _prefetchProfile() async {
+    final user = _authService.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists && context.mounted) {
+        final data = doc.data()!;
+        setState(() {
+          _cachedPhotoUrl = data['photoUrl'] as String?;
+          _cachedName = data['fullName'] ?? '';
+          final dbAvail = data['isAcceptingCases'];
+          if (dbAvail is bool && !_isAvailabilityUpdating) {
+            _isAcceptingCase = dbAvail;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('LawyerProfileScreen prefetch error: $e');
+    }
+  }
+
+  Future<void> _updateAvailability(bool value) async {
+    final user = _authService.currentUser;
+    if (user == null) return;
+
+    final previousValue = _isAcceptingCase;
+    setState(() {
+      _isAcceptingCase = value;
+      _isAvailabilityUpdating = true;
+    });
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'isAcceptingCases': value,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      int pausedAds = 0;
+      if (!value) {
+        pausedAds = await _lawyerAdService.pauseAllActiveAdsForLawyer(user.uid);
+      }
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value
+                ? 'You are now accepting new cases.'
+                : pausedAds > 0
+                    ? 'You stopped accepting cases. $pausedAds ad(s) were paused.'
+                    : 'You stopped accepting cases. Your profile is hidden from search.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      setState(() {
+        _isAcceptingCase = previousValue;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update availability: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAvailabilityUpdating = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openHelpCenter() async {
+    final uri = Uri.parse('https://bkxlabs.com/contact');
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open help page')),
+      );
+    }
+  }
 
   Future<void> _handleLogout() async {
     // ... (keep existing logout logic)
@@ -43,9 +139,9 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
     );
 
     if (confirm == true) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       await _authService.signOut();
-      if (!mounted) return;
+      if (!context.mounted) return;
       context.go('/login?role=lawyer');
     }
   }
@@ -70,18 +166,25 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
               snapshot.data!.exists) {
             final data = snapshot.data!.data();
             if (data != null) {
-              fullName = data['fullName'] ?? 'Advocate';
-              location = data['city'] ?? 'Pakistan';
-              photoUrl = data['photoUrl'];
-              // _isAcceptingCase = data['isAcceptingCases'] ?? true; // Could sync this too
+              final dbName = data['fullName'] as String?;
+              fullName = (dbName != null && dbName.isNotEmpty)
+                  ? dbName
+                  : (_cachedName.isNotEmpty ? _cachedName : 'Advocate');
+              location = data['location'] ?? data['city'] ?? 'Pakistan';
+              photoUrl = (data['photoUrl'] as String?)?.isNotEmpty == true
+                  ? data['photoUrl'] as String
+                  : _cachedPhotoUrl;
+              final dbAvailability = data['isAcceptingCases'];
+              if (!_isAvailabilityUpdating && dbAvailability is bool) {
+                _isAcceptingCase = dbAvailability;
+              }
               experience = '${data['experienceYears'] ?? 0}+ Years';
               badge = data['licenseType'] ?? 'Associate';
-              debugPrint(
-                  'LawyerProfileScreen: Name=$fullName, PhotoUrl=$photoUrl'); // Debug Log
             }
           } else {
-            debugPrint(
-                'LawyerProfileScreen: Snapshot has NO DATA or does not exist');
+            // Use prefetched values while stream loads
+            fullName = _cachedName.isNotEmpty ? _cachedName : 'Advocate';
+            photoUrl = _cachedPhotoUrl;
           }
 
           return Scaffold(
@@ -96,7 +199,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
                   // Availability Switch (Floating Card)
                   Transform.translate(
                     offset: const Offset(0, -30),
-                    child: _buildAvailabilityCard(),
+                    child: _buildAvailabilityCard(_isAcceptingCase),
                   ),
 
                   // Menu Groups
@@ -113,13 +216,13 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
                               icon: PhosphorIconsRegular.wallet,
                               title: 'My Wallet & Earnings',
                               iconColor: AppColors.primary,
-                              onTap: () {}, // Link to Wallet
+                              onTap: () => context.push('/wallet'),
                             ),
                             _MenuItem(
                               icon: PhosphorIconsRegular.megaphone,
                               title: 'Manage Gigs / Ads',
                               iconColor: AppColors.secondary,
-                              onTap: () {},
+                              onTap: () => context.push('/lawyer-manage-ads'),
                             ),
                             _MenuItem(
                               icon: PhosphorIconsRegular.shieldCheck,
@@ -127,6 +230,19 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
                               iconColor: AppColors.success,
                               subtitle: 'Verified',
                               onTap: () {},
+                            ),
+                            _MenuItem(
+                              icon: PhosphorIconsRegular.checkCircle,
+                              title: 'Completed Cases',
+                              iconColor: AppColors.primary,
+                              onTap: () => context.push('/completed-cases'),
+                            ),
+                            _MenuItem(
+                              icon: PhosphorIconsRegular.fileText,
+                              title: 'My Documents',
+                              iconColor: Colors.blue,
+                              subtitle: 'All case attachments',
+                              onTap: () => context.push('/document-review'),
                             ),
                           ],
                         ),
@@ -142,12 +258,12 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
                             _MenuItem(
                               icon: PhosphorIconsRegular.bell,
                               title: 'Notifications',
-                              onTap: () {},
+                              onTap: () => context.push('/notifications'),
                             ),
                             _MenuItem(
                               icon: PhosphorIconsRegular.lockKey,
                               title: 'Security & Password',
-                              onTap: () {},
+                              onTap: () => context.push('/lawyer-security-password'),
                             ),
                           ],
                         ),
@@ -158,7 +274,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
                             _MenuItem(
                               icon: PhosphorIconsRegular.question,
                               title: 'Help Center',
-                              onTap: () {},
+                              onTap: _openHelpCenter,
                             ),
                             _MenuItem(
                               icon: PhosphorIconsRegular.signOut,
@@ -197,45 +313,10 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
       child: Column(
         children: [
           // Avatar
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.secondary, width: 4),
-            ),
-            child: Container(
-              width: 100,
-              height: 100,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.grey200,
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: photoUrl != null
-                  ? Image.network(
-                      photoUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Center(
-                          child: Icon(PhosphorIconsRegular.user,
-                              size: 50, color: AppColors.textSecondary),
-                        );
-                      },
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return const Center(
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.primary,
-                          ),
-                        );
-                      },
-                    )
-                  : const Center(
-                      child: Icon(PhosphorIconsRegular.user,
-                          size: 50, color: AppColors.textSecondary),
-                    ),
-            ),
+          const CurrentUserAvatar(
+            radius: 50,
+            borderColor: AppColors.secondary,
+            borderWidth: 4,
           ),
           const SizedBox(height: AppSpacing.md),
 
@@ -266,7 +347,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
           Text(
             location,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               fontSize: 14,
             ),
           ),
@@ -309,7 +390,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
+            color: Colors.white.withValues(alpha: 0.7),
             fontSize: 12,
           ),
         ),
@@ -321,12 +402,12 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
     return Container(
       height: 24,
       width: 1,
-      color: Colors.white.withOpacity(0.2),
+      color: Colors.white.withValues(alpha: 0.2),
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
     );
   }
 
-  Widget _buildAvailabilityCard() {
+  Widget _buildAvailabilityCard(bool isAcceptingCases) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       padding: const EdgeInsets.all(AppSpacing.sm), // Inner padding
@@ -335,15 +416,15 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.08),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.08),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),
         ],
       ),
       child: SwitchListTile(
-        value: _isAcceptingCase,
-        activeColor: AppColors.success,
+        value: isAcceptingCases,
+        activeThumbColor: AppColors.success,
         title: const Text(
           'Accepting New Cases',
           style: TextStyle(
@@ -353,28 +434,24 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
           ),
         ),
         subtitle: const Text(
-          'Turn off to hide your profile from search.',
+          'Turn off to hide your profile from search and pause your ads.',
           style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
         secondary: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: _isAcceptingCase
-                ? AppColors.success.withOpacity(0.1)
+            color: isAcceptingCases
+                ? AppColors.success.withValues(alpha: 0.1)
                 : AppColors.grey100,
             shape: BoxShape.circle,
           ),
           child: Icon(
             PhosphorIconsRegular.briefcase,
             color:
-                _isAcceptingCase ? AppColors.success : AppColors.textSecondary,
+                isAcceptingCases ? AppColors.success : AppColors.textSecondary,
           ),
         ),
-        onChanged: (val) {
-          setState(() {
-            _isAcceptingCase = val;
-          });
-        },
+        onChanged: _isAvailabilityUpdating ? null : _updateAvailability,
       ),
     );
   }
@@ -411,7 +488,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: (item.iconColor ?? AppColors.textSecondary)
-                            .withOpacity(0.1),
+                            .withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(

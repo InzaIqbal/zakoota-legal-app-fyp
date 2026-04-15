@@ -32,7 +32,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
-    final size = MediaQuery.of(context).size;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -138,7 +137,7 @@ class _RoleCard extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           color: isSelected
-              ? colorScheme.primary.withOpacity(0.05)
+              ? colorScheme.primary.withValues(alpha: 0.05)
               : colorScheme.surface,
           border: Border.all(
             color: isSelected ? colorScheme.primary : AppColors.grey300,
@@ -155,7 +154,7 @@ class _RoleCard extends StatelessWidget {
               height: 80,
               decoration: BoxDecoration(
                 color: isSelected
-                    ? colorScheme.secondary.withOpacity(0.15)
+                    ? colorScheme.secondary.withValues(alpha: 0.15)
                     : AppColors.grey100,
                 shape: BoxShape.circle,
               ),

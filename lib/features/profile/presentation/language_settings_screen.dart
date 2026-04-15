@@ -50,7 +50,7 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
         child: Column(
           children: [
             const SizedBox(height: AppSpacing.lg),
-            ..._languages.map((lang) => _buildLanguageItem(lang)).toList(),
+            ..._languages.map((lang) => _buildLanguageItem(lang)),
           ],
         ),
       ),

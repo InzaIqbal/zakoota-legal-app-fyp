@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../services/wallet_service.dart';
 
 /// Withdraw Dialog - Modal bottom sheet for withdrawing money
 class WithdrawDialog extends StatefulWidget {
-  const WithdrawDialog({super.key});
+  final bool closeOnSuccess;
+
+  const WithdrawDialog({super.key, this.closeOnSuccess = true});
 
   @override
   State<WithdrawDialog> createState() => _WithdrawDialogState();
@@ -15,6 +19,8 @@ class _WithdrawDialogState extends State<WithdrawDialog> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _accountController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
+  final AuthService _authService = AuthService();
+  final WalletService _walletService = WalletService();
 
   String _selectedMethod = 'bank';
   bool _isProcessing = false;
@@ -45,24 +51,76 @@ class _WithdrawDialogState extends State<WithdrawDialog> {
       return;
     }
 
+    final amount = double.tryParse(_amountController.text);
+    if (amount == null || amount <= 0) {
+      _showError('Enter a valid amount');
+      return;
+    }
+
+    final user = _authService.currentUser;
+    if (user == null) {
+      _showError('Please login again');
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
-    // Simulate processing
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final operationId =
+          'withdraw_request_${user.uid}_${DateTime.now().microsecondsSinceEpoch}';
+      await _walletService.createWithdrawalRequest(
+        userId: user.uid,
+        amount: amount,
+        method: _selectedMethod,
+        account: _accountController.text.trim(),
+        accountTitle:
+            _selectedMethod == 'bank' ? _titleController.text.trim() : null,
+        operationId: operationId,
+      );
 
-    if (!mounted) return;
-
-    Navigator.pop(context);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Withdrawal Request Submitted - PKR ${_amountController.text}',
+      if (!mounted) return;
+      if (widget.closeOnSuccess) {
+        Navigator.pop(context);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Withdrawal Request Submitted - PKR ${amount.toStringAsFixed(0)}',
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
         ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showError(_friendlyWithdrawError(e));
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  String _friendlyWithdrawError(Object error) {
+    final raw = error.toString().replaceFirst('Exception: ', '').trim();
+    final msg = raw.toLowerCase();
+
+    if (msg.contains('insufficient')) {
+      return raw;
+    }
+    if (msg.contains('dart exception thrown from converted future')) {
+      return 'Unable to process withdrawal right now. Please check your balance and try again.';
+    }
+    if (msg.contains('permission')) {
+      return 'You are not allowed to perform this withdrawal.';
+    }
+    if (msg.contains('user not found')) {
+      return 'Account not found. Please login again.';
+    }
+
+    return raw.isEmpty
+        ? 'Withdrawal failed. Please try again.'
+        : raw;
   }
 
   void _showError(String message) {
@@ -112,11 +170,12 @@ class _WithdrawDialogState extends State<WithdrawDialog> {
             const SizedBox(height: AppSpacing.lg),
 
             // Title
-            Text(
+            const Text(
               'Withdraw Funds',
-              style: textTheme.headlineSmall?.copyWith(
+              style: TextStyle(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w700,
+                fontSize: 20,
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -301,7 +360,7 @@ class _MethodCard extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.secondary.withOpacity(0.1)
+              ? AppColors.secondary.withValues(alpha: 0.1)
               : AppColors.background,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(

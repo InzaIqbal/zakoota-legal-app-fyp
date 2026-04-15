@@ -21,7 +21,7 @@ class VerificationRejectedScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.xxl),
                 decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.1),
+                  color: AppColors.error.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: PhosphorIcon(

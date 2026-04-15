@@ -29,6 +29,8 @@ class _LawyerPhotoUploadScreenState extends State<LawyerPhotoUploadScreen> {
       final XFile? pickedFile = await _imagePicker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 80,
+        maxWidth: 1080,
+        maxHeight: 1080,
       );
 
       if (pickedFile != null) {
@@ -58,7 +60,7 @@ class _LawyerPhotoUploadScreenState extends State<LawyerPhotoUploadScreen> {
       if (user == null) throw Exception('User not logged in');
 
       // 1. Upload Photo
-      await _authService.uploadProfilePhoto_Lawyer(user.uid, _imageFile!);
+      await _authService.uploadProfilePhotoLawyer(user.uid, _imageFile!);
 
       // 2. Mark Public Profile as Completed
       await _firestore.collection('users').doc(user.uid).update({

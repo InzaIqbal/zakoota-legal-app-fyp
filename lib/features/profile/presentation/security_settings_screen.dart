@@ -132,7 +132,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: PhosphorIcon(icon, color: AppColors.primary),
@@ -162,7 +162,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
       child: SwitchListTile(
         value: value,
         onChanged: onChanged,
-        activeColor: AppColors.secondary,
+        activeThumbColor: AppColors.secondary,
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(subtitle,
             style:
@@ -170,7 +170,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         secondary: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: PhosphorIcon(icon, color: AppColors.primary),

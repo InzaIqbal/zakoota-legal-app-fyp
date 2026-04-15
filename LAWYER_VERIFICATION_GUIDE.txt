@@ -1,0 +1,86 @@
+LAWYER PROFILE FIELDS & VERIFICATION SYSTEM
+==============================================
+
+HOW LAWYERS GET VERIFIED:
+=========================
+1. Lawyer signs up and completes profile (fullName, specializations, etc.)
+2. Lawyer submits verification documents:
+   - CNIC (front & back)
+   - Bar Council Certificate/License
+   - Professional documents
+3. Admin verifies documents and approves
+4. verificationStatus changes from "pending" → "approved"
+5. Lawyer profile appears in search
+
+CURRENT DATABASE STRUCTURE:
+==========================
+
+Account Status Fields:
+- accountStatus: "active" | "inactive" (Can pause their profile)
+- verificationStatus: "pending" | "approved" | "rejected" (Verification process)
+
+Profile Fields:
+- fullName: string (Lawyer's full name)
+- professionalHeading: string (Title/Specialization heading)
+- email: string (Email address)
+- phoneNumber: string (Contact number)
+- location: string (City/Location)
+- photoUrl: string (Profile photo)
+- bio: string (About me/bio)
+- specializations: array (Legal specializations)
+
+License/Experience:
+- barLicenseNo: string (License number)
+- licenseType: string (e.g., "Supreme Court")
+- experienceYears: int (Years of experience)
+- education: string or array (Education/qualifications)
+
+Consultation Details:
+- hourlyRate: int (Consultation fee)
+- rating: int (Average rating)
+- reviewsCount: int (Number of reviews)
+
+Verification Documents:
+- verificationDocuments: map
+  - cnic_front: URL
+  - cnic_back: URL
+  - bar_council_card: URL
+- verificationSubmittedAt: timestamp
+- verificationStatus: "pending|approved|rejected"
+- profileReviewCompleted: boolean
+- publicProfileCompleted: boolean
+
+Metadata:
+- createdAt: timestamp
+- updatedAt: timestamp
+- enrollmentDate: timestamp
+- role: "lawyer" (fixed)
+- isOnline: boolean
+
+WHAT APPEARS IN SEARCH:
+=======================
+✓ verificationStatus == "approved" (Verified by admin)
+✓ accountStatus == "active" (Not paused by lawyer)
+✗ profileReviewCompleted == false (Won't show)
+✗ publicProfileCompleted == false (Won't show)
+✗ verificationStatus == "pending" (Still under review)
+✗ verificationStatus == "rejected" (Not approved)
+✗ accountStatus == "inactive" (Lawyer paused their profile)
+
+UPDATING LAWYERS:
+==================
+To verify a lawyer manually in Firebase:
+1. Go to Firestore > lawyers collection
+2. Find the lawyer document
+3. Set: verificationStatus = "approved"
+4. Set: accountStatus = "active"
+5. The lawyer will appear in search immediately
+
+CODE REFERENCES:
+================
+- LawyerService.fetchAllLawyers() queries:
+  WHERE verificationStatus == "approved"
+  AND accountStatus == "active"
+
+- Firestore Rules allow public read-only access to verified/active profiles
+- Only the lawyer (authenticated) can modify their own profile

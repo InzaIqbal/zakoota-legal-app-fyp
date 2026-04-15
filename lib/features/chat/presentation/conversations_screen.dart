@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_constants.dart';
-import '../data/chat_mock_data.dart';
+import '../models/chat_model.dart';
+import '../services/chat_service.dart';
 
-/// Conversations List Screen - Shows all active chats with search and filters
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
 
@@ -14,14 +16,28 @@ class ConversationsScreen extends StatefulWidget {
 
 class _ConversationsScreenState extends State<ConversationsScreen>
     with SingleTickerProviderStateMixin {
+  final _chatService = ChatService();
   final _searchController = TextEditingController();
   late TabController _tabController;
   String _searchQuery = '';
+  String? _userRole;
+  final _currentUser = FirebaseAuth.instance.currentUser;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _getUserRole();
+  }
+
+  Future<void> _getUserRole() async {
+    if (_currentUser == null) return;
+    final doc = await FirebaseFirestore.instance.collection('users').doc(_currentUser.uid).get();
+    if (doc.exists && mounted) {
+      setState(() {
+        _userRole = doc.data()?['role'];
+      });
+    }
   }
 
   @override
@@ -31,34 +47,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     super.dispose();
   }
 
-  List<Conversation> get _filteredConversations {
-    var conversations = ChatMockData.conversations;
-
-    // Apply search filter
-    if (_searchQuery.isNotEmpty) {
-      conversations = conversations.where((conv) {
-        return conv.lawyerName
-                .toLowerCase()
-                .contains(_searchQuery.toLowerCase()) ||
-            conv.lastMessage.toLowerCase().contains(_searchQuery.toLowerCase());
-      }).toList();
-    }
-
-    // Apply tab filter
-    if (_tabController.index == 1) {
-      // Unread tab
-      conversations =
-          conversations.where((conv) => conv.unreadCount > 0).toList();
-    }
-
-    return conversations;
-  }
-
   @override
   Widget build(BuildContext context) {
+    if (_currentUser == null) return const Scaffold(body: Center(child: Text('Please login')));
+
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final conversations = _filteredConversations;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -75,40 +69,18 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           ),
         ),
         actions: [
-          // Zing AI Assistant
           IconButton(
             tooltip: 'Zing AI Assistant',
-            icon: const PhosphorIcon(
-              PhosphorIconsRegular.sparkle,
-              color: Colors.white,
-            ),
+            icon: const PhosphorIcon(PhosphorIconsRegular.sparkle, color: Colors.white),
             onPressed: () => context.push('/ai-chat'),
-          ),
-          IconButton(
-            icon: const PhosphorIcon(
-              PhosphorIconsRegular.userCirclePlus,
-              color: Colors.white,
-            ),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('New conversation - Coming soon'),
-                  backgroundColor: AppColors.secondary,
-                ),
-              );
-            },
           ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(110),
           child: Column(
             children: [
-              // Search Bar
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -116,45 +88,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   ),
                   child: TextField(
                     controller: _searchController,
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                      });
-                    },
+                    onChanged: (value) => setState(() => _searchQuery = value),
                     decoration: InputDecoration(
                       hintText: 'Search conversations...',
-                      hintStyle: textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textLight,
-                      ),
-                      prefixIcon: PhosphorIcon(
-                        PhosphorIconsRegular.magnifyingGlass,
-                        color: AppColors.textLight,
-                      ),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: PhosphorIcon(
-                                PhosphorIconsRegular.x,
-                                color: AppColors.textLight,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _searchController.clear();
-                                  _searchQuery = '';
-                                });
-                              },
-                            )
-                          : null,
+                      hintStyle: textTheme.bodyMedium?.copyWith(color: AppColors.textLight),
+                      prefixIcon: PhosphorIcon(PhosphorIconsRegular.magnifyingGlass, color: AppColors.textLight),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.sm,
-                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                     ),
                   ),
                 ),
               ),
-
-              // Tabs
               Container(
                 color: AppColors.primary,
                 child: TabBar(
@@ -163,192 +107,133 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   indicatorColor: AppColors.secondary,
                   indicatorWeight: 3,
                   labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white.withOpacity(0.6),
-                  labelStyle: textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  tabs: const [
-                    Tab(text: 'All Chats'),
-                    Tab(text: 'Unread'),
-                  ],
+                  unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+                  tabs: const [Tab(text: 'All Chats'), Tab(text: 'Unread')],
                 ),
               ),
             ],
           ),
         ),
       ),
-      body: conversations.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  PhosphorIcon(
-                    _searchQuery.isNotEmpty
-                        ? PhosphorIconsRegular.magnifyingGlass
-                        : PhosphorIconsRegular.chatCircle,
-                    size: 64,
-                    color: AppColors.textLight,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xl,
-                    ),
-                    child: Text(
-                      _searchQuery.isNotEmpty
-                          ? 'No conversations found'
-                          : _tabController.index == 1
-                              ? 'No unread messages'
-                              : 'No messages yet',
-                      style: textTheme.titleMedium?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xl,
-                    ),
-                    child: Text(
-                      _searchQuery.isNotEmpty
-                          ? 'Try a different search term'
-                          : 'Start a conversation from a Lawyer\'s profile',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: [
-                // Results count
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  color: AppColors.grey200,
-                  child: Row(
-                    children: [
-                      Text(
-                        '${conversations.length} ${conversations.length == 1 ? 'Conversation' : 'Conversations'}',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const Spacer(),
-                      PhosphorIcon(
-                        PhosphorIconsRegular.funnelSimple,
-                        size: 16,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Sort by: Recent',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+      body: StreamBuilder<List<ChatModel>>(
+        stream: _chatService.streamConversations(_currentUser.uid),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return _buildEmptyState(textTheme);
+          }
 
-                // Conversation List
-                Expanded(
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: conversations.length,
-                    itemBuilder: (context, index) {
-                      return _ConversationTile(
-                        conversation: conversations[index],
-                      );
-                    },
-                  ),
-                ),
-              ],
+          var chats = snapshot.data!;
+
+          // Apply filters
+          if (_searchQuery.isNotEmpty) {
+            chats = chats.where((chat) {
+              final otherName = _userRole == 'client' ? chat.lawyerName : chat.clientName;
+              return otherName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                  chat.lastMessage.toLowerCase().contains(_searchQuery.toLowerCase());
+            }).toList();
+          }
+
+          if (_tabController.index == 1) {
+            chats = chats.where((chat) => (chat.unreadCounts[_currentUser.uid] ?? 0) > 0).toList();
+          }
+
+          if (chats.isEmpty) return _buildEmptyState(textTheme);
+
+          return ListView.builder(
+            padding: EdgeInsets.zero,
+            itemCount: chats.length,
+            itemBuilder: (context, index) => _ConversationTile(
+              chat: chats[index],
+              userRole: _userRole ?? 'client',
+              currentUserId: _currentUser.uid,
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(TextTheme textTheme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          PhosphorIcon(PhosphorIconsRegular.chatCircle, size: 64, color: AppColors.textLight),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'No messages yet',
+            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: Text(
+              _userRole == 'lawyer' 
+                ? 'Wait for clients to message you. Lawyers cannot initiate chats.'
+                : 'Start a conversation from a Lawyer\'s profile.',
+              textAlign: TextAlign.center,
+              style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// Conversation Tile Widget
 class _ConversationTile extends StatelessWidget {
-  final Conversation conversation;
+  final ChatModel chat;
+  final String userRole;
+  final String currentUserId;
 
-  const _ConversationTile({required this.conversation});
+  const _ConversationTile({
+    required this.chat,
+    required this.userRole,
+    required this.currentUserId,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final isClient = userRole == 'client';
+    final otherName = isClient ? chat.lawyerName : chat.clientName;
+    final otherAvatar = isClient ? chat.lawyerAvatar : chat.clientAvatar;
+    final unreadCount = chat.unreadCounts[currentUserId] ?? 0;
 
     return InkWell(
       onTap: () {
         context.push(
-          '/chat/${conversation.id}',
+          '/chat/${chat.id}',
           extra: {
-            'lawyerName': conversation.lawyerName,
-            'lawyerId': conversation.lawyerId,
-            'isOnline': conversation.isOnline,
-            'lawyerAvatar': conversation.lawyerAvatar,
+            'lawyerName': chat.lawyerName,
+            'lawyerId': chat.lawyerId,
+            'clientName': chat.clientName,
+            'clientId': chat.clientId,
+            'isOnline': true,
+            'lawyerAvatar': chat.lawyerAvatar,
+            'clientAvatar': chat.clientAvatar,
           },
         );
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.md,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          border: Border(
-            bottom: BorderSide(
-              color: AppColors.grey300.withOpacity(0.3),
-              width: 1,
-            ),
-          ),
+          border: Border(bottom: BorderSide(color: AppColors.grey300.withValues(alpha: 0.3))),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Avatar with Online Indicator
-            Stack(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: AppColors.grey300,
-                  backgroundImage: NetworkImage(conversation.lawyerAvatar),
-                ),
-                if (conversation.isOnline)
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: AppColors.success,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppColors.surface,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: AppColors.grey300,
+              backgroundImage: otherAvatar != null ? NetworkImage(otherAvatar) : null,
+              child: otherAvatar == null ? Text(otherName[0]) : null,
             ),
-
             const SizedBox(width: AppSpacing.md),
-
-            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -356,75 +241,29 @@ class _ConversationTile extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Lawyer Name
-                      Expanded(
-                        child: Text(
-                          conversation.lawyerName,
-                          style: textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-
-                      // Time
-                      Text(
-                        _formatTime(conversation.lastMessageTime),
-                        style: textTheme.bodySmall?.copyWith(
-                          color: AppColors.textLight,
-                          fontSize: 11,
-                        ),
-                      ),
+                      Text(otherName, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(_formatTime(chat.lastMessageTime), style: textTheme.bodySmall?.copyWith(fontSize: 11)),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      // Last Message Preview
                       Expanded(
                         child: Text(
-                          conversation.lastMessage,
+                          chat.lastMessage,
                           style: textTheme.bodyMedium?.copyWith(
-                            color: conversation.unreadCount > 0
-                                ? AppColors.textPrimary
-                                : AppColors.textSecondary,
-                            fontWeight: conversation.unreadCount > 0
-                                ? FontWeight.w600
-                                : FontWeight.w400,
+                            color: unreadCount > 0 ? AppColors.textPrimary : AppColors.textSecondary,
+                            fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-
-                      const SizedBox(width: AppSpacing.sm),
-
-                      // Unread Badge
-                      if (conversation.unreadCount > 0)
+                      if (unreadCount > 0)
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.error,
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 20,
-                            minHeight: 20,
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${conversation.unreadCount}',
-                              style: textTheme.labelSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
+                          child: Text('$unreadCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
                     ],
                   ),
@@ -440,15 +279,9 @@ class _ConversationTile extends StatelessWidget {
   String _formatTime(DateTime time) {
     final now = DateTime.now();
     final diff = now.difference(time);
-
-    if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
-    } else if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
-    } else if (diff.inDays == 1) {
-      return 'Yesterday';
-    } else {
-      return '${diff.inDays}d ago';
-    }
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${time.day}/${time.month}';
   }
 }
+

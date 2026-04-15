@@ -43,7 +43,7 @@ class SavedLawyersScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    PhosphorIcon(
+                    const PhosphorIcon(
                       PhosphorIconsRegular.bookmarkSimple,
                       size: 64,
                       color: AppColors.textLight,
@@ -70,7 +70,7 @@ class SavedLawyersScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(AppRadius.md),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -122,7 +122,7 @@ class SavedLawyersScreen extends StatelessWidget {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      PhosphorIcon(
+                                      const PhosphorIcon(
                                         PhosphorIconsFill.bookmarkSimple,
                                         color: AppColors.secondary,
                                         size: 20,
@@ -138,7 +138,7 @@ class SavedLawyersScreen extends StatelessWidget {
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      PhosphorIcon(
+                                      const PhosphorIcon(
                                         PhosphorIconsFill.star,
                                         size: 14,
                                         color: AppColors.warning,
@@ -153,7 +153,7 @@ class SavedLawyersScreen extends StatelessWidget {
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        '(${lawyer.reviewCount} reviews)',
+                                        '(${lawyer.reviewsCount} reviews)',
                                         style: theme.textTheme.labelSmall
                                             ?.copyWith(
                                           color: AppColors.textLight,

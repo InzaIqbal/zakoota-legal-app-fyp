@@ -403,7 +403,7 @@ class _LawyerProfileSetupScreenState extends State<LawyerProfileSetupScreen> {
                       selected: isSelected,
                       onSelected: (_) => _toggleSpecialization(spec),
                       backgroundColor: Colors.white,
-                      selectedColor: AppColors.secondary.withOpacity(0.2),
+                      selectedColor: AppColors.secondary.withValues(alpha: 0.2),
                       checkmarkColor: AppColors.secondary,
                       labelStyle: TextStyle(
                         color: isSelected

@@ -1,7 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/auth_service.dart';
+import '../../notifications/services/notification_service.dart';
 
 /// Lawyer main wrapper with bottom navigation
 class LawyerMainWrapper extends StatefulWidget {
@@ -14,6 +16,9 @@ class LawyerMainWrapper extends StatefulWidget {
 }
 
 class _LawyerMainWrapperState extends State<LawyerMainWrapper> {
+  final NotificationService _notificationService = NotificationService();
+  final AuthService _authService = AuthService();
+
   void _onTap(int index) {
     widget.navigationShell.goBranch(
       index,
@@ -52,7 +57,7 @@ class _LawyerMainWrapperState extends State<LawyerMainWrapper> {
               fontFamily: AppTextStyles.bodyFont,
               fontWeight: FontWeight.w500,
             ),
-            items: const [
+            items: [
               BottomNavigationBarItem(
                 icon: PhosphorIcon(PhosphorIconsRegular.squaresFour),
                 label: 'Dashboard',
@@ -66,6 +71,10 @@ class _LawyerMainWrapperState extends State<LawyerMainWrapper> {
                 label: 'Job Board',
               ),
               BottomNavigationBarItem(
+                icon: _buildMessagesIconWithBadge(),
+                label: 'Messages',
+              ),
+              BottomNavigationBarItem(
                 icon: PhosphorIcon(PhosphorIconsRegular.user),
                 label: 'Profile',
               ),
@@ -73,6 +82,48 @@ class _LawyerMainWrapperState extends State<LawyerMainWrapper> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildMessagesIconWithBadge() {
+    final user = _authService.currentUser;
+    if (user == null) {
+      return const PhosphorIcon(PhosphorIconsRegular.chatCircleText);
+    }
+
+    return StreamBuilder<int>(
+      stream: _notificationService.streamUnreadCount(user.uid),
+      builder: (context, snapshot) {
+        final unreadCount = snapshot.data ?? 0;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const PhosphorIcon(PhosphorIconsRegular.chatCircleText),
+            if (unreadCount > 0)
+              Positioned(
+                right: -4,
+                top: -2,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: const BoxDecoration(
+                    color: AppColors.error,
+                    borderRadius: BorderRadius.all(Radius.circular(10)),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

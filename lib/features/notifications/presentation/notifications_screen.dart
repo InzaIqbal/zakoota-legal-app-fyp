@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_constants.dart';
-import '../data/notifications_mock_data.dart';
+import '../../../core/services/auth_service.dart';
+import '../models/notification_model.dart';
+import '../services/notification_service.dart';
 
 /// Notifications Screen
 class NotificationsScreen extends StatefulWidget {
@@ -14,22 +16,15 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  late List<Map<String, dynamic>> notifications;
-
-  @override
-  void initState() {
-    super.initState();
-    notifications = NotificationsMockData.getNotifications();
-  }
+  final NotificationService _notificationService = NotificationService();
+  final AuthService _authService = AuthService();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
 
-    // Group notifications
-    final today = _getNotificationsForToday();
-    final earlier = _getNotificationsEarlier();
+    final user = _authService.currentUser;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -60,49 +55,111 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
         ],
       ),
-      body: notifications.isEmpty
-          ? _buildEmptyState()
-          : ListView(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              children: [
-                // Today Section
-                if (today.isNotEmpty) ...[
-                  Text(
-                    'Today',
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  ...today.map((notification) => _NotificationCard(
-                        notification: notification,
-                        onTap: () => _handleNotificationTap(notification),
-                        onDismiss: () =>
-                            _dismissNotification(notification['id']),
-                      )),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
+      body: user == null
+          ? _buildNotLoggedInState()
+          : StreamBuilder<List<AppNotification>>(
+              stream: _notificationService.streamNotifications(user.uid),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                // Earlier Section
-                if (earlier.isNotEmpty) ...[
-                  Text(
-                    'Earlier',
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  ...earlier.map((notification) => _NotificationCard(
-                        notification: notification,
-                        onTap: () => _handleNotificationTap(notification),
-                        onDismiss: () =>
-                            _dismissNotification(notification['id']),
-                      )),
-                ],
-              ],
+                if (snapshot.hasError) {
+                  return _buildErrorState(snapshot.error.toString());
+                }
+
+                final notifications = snapshot.data ?? [];
+                if (notifications.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                final grouped = _groupNotifications(notifications);
+                final today = grouped.$1;
+                final earlier = grouped.$2;
+
+                return ListView(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  children: [
+                    if (today.isNotEmpty) ...[
+                      Text(
+                        'Today',
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      ...today.map((notification) => _NotificationCard(
+                            notification: notification,
+                            onTap: () => _handleNotificationTap(notification),
+                            onDismiss: () =>
+                                _dismissNotification(notification.id),
+                          )),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
+                    if (earlier.isNotEmpty) ...[
+                      Text(
+                        'Earlier',
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      ...earlier.map((notification) => _NotificationCard(
+                            notification: notification,
+                            onTap: () => _handleNotificationTap(notification),
+                            onDismiss: () =>
+                                _dismissNotification(notification.id),
+                          )),
+                    ],
+                  ],
+                );
+              },
             ),
+    );
+  }
+
+  Widget _buildNotLoggedInState() {
+    final textTheme = Theme.of(context).textTheme;
+    return Center(
+      child: Text(
+        'Please login to view notifications',
+        style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    final textTheme = Theme.of(context).textTheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            PhosphorIcon(
+              PhosphorIconsRegular.warning,
+              size: 64,
+              color: AppColors.error,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Could not load notifications',
+              style: textTheme.titleMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -138,30 +195,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  List<Map<String, dynamic>> _getNotificationsForToday() {
+  (List<AppNotification>, List<AppNotification>) _groupNotifications(
+    List<AppNotification> notifications,
+  ) {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
 
-    return notifications
-        .where((n) => (n['timestamp'] as DateTime).isAfter(todayStart))
+    final today = notifications
+        .where((n) => n.createdAt.isAfter(todayStart))
         .toList();
+    final earlier = notifications
+        .where((n) => n.createdAt.isBefore(todayStart))
+        .toList();
+    return (today, earlier);
   }
 
-  List<Map<String, dynamic>> _getNotificationsEarlier() {
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
+  Future<void> _markAllAsRead() async {
+    final user = _authService.currentUser;
+    if (user == null) return;
 
-    return notifications
-        .where((n) => (n['timestamp'] as DateTime).isBefore(todayStart))
-        .toList();
-  }
+    await _notificationService.markAllAsRead(user.uid);
 
-  void _markAllAsRead() {
-    setState(() {
-      for (var notification in notifications) {
-        notification['isRead'] = true;
-      }
-    });
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('All notifications marked as read'),
@@ -171,46 +226,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  void _dismissNotification(String id) {
-    setState(() {
-      notifications.removeWhere((n) => n['id'] == id);
-    });
+  Future<void> _dismissNotification(String id) async {
+    final user = _authService.currentUser;
+    if (user == null) return;
+    await _notificationService.dismissNotification(user.uid, id);
   }
 
-  void _handleNotificationTap(Map<String, dynamic> notification) {
-    // Mark as read
-    setState(() {
-      notification['isRead'] = true;
-    });
+  Future<void> _handleNotificationTap(AppNotification notification) async {
+    final user = _authService.currentUser;
+    if (user == null) return;
 
-    // Navigate based on type
-    final type = notification['type'];
-
-    if (type == 'hearing' || type == 'case_update' || type == 'case_filed') {
-      final caseId = notification['caseId'];
-      if (caseId != null) {
-        context.push('/case-details/$caseId');
-      }
-    } else if (type == 'message') {
-      final lawyerId = notification['lawyerId'];
-      if (lawyerId != null) {
-        context.push('/chat/$lawyerId', extra: {
-          'lawyerName': 'Adv. Sarah Ahmed',
-          'lawyerId': lawyerId,
-          'isOnline': true,
-          'lawyerAvatar':
-              'https://api.dicebear.com/7.x/avataaars/png?seed=Sarah',
-        });
-      }
-    } else if (type == 'payment') {
-      context.push('/wallet');
+    if (!notification.isRead) {
+      await _notificationService.markAsRead(user.uid, notification.id);
     }
   }
 }
 
 /// Notification Card Widget
 class _NotificationCard extends StatelessWidget {
-  final Map<String, dynamic> notification;
+  final AppNotification notification;
   final VoidCallback onTap;
   final VoidCallback onDismiss;
 
@@ -223,12 +257,12 @@ class _NotificationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final isRead = notification['isRead'] as bool;
-    final timestamp = notification['timestamp'] as DateTime;
-    final type = notification['type'] as String;
+    final isRead = notification.isRead;
+    final timestamp = notification.createdAt;
+    final type = notification.typeKey;
 
     return Dismissible(
-      key: Key(notification['id']),
+      key: Key(notification.id),
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
@@ -248,12 +282,12 @@ class _NotificationCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: AppSpacing.sm),
         decoration: BoxDecoration(
           color:
-              isRead ? AppColors.surface : AppColors.secondary.withOpacity(0.1),
+              isRead ? AppColors.surface : AppColors.secondary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
             color: isRead
                 ? AppColors.grey300
-                : AppColors.secondary.withOpacity(0.3),
+                : AppColors.secondary.withValues(alpha: 0.3),
             width: isRead ? 1 : 2,
           ),
         ),
@@ -264,7 +298,7 @@ class _NotificationCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  notification['title'],
+                  notification.title,
                   style: textTheme.titleSmall?.copyWith(
                     fontWeight: isRead ? FontWeight.w600 : FontWeight.w700,
                   ),
@@ -286,7 +320,7 @@ class _NotificationCard extends StatelessWidget {
             children: [
               const SizedBox(height: 4),
               Text(
-                notification['message'],
+                notification.message,
                 style: textTheme.bodySmall?.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -350,7 +384,7 @@ class _NotificationCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: PhosphorIcon(
