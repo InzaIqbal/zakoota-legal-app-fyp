@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_constants.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../data/case_details_mock_data.dart';
 
 /// Case Details Screen with Tabs (Overview, Timeline, Documents)
@@ -26,6 +27,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
   late TabController _tabController;
   Map<String, dynamic> caseData = {};
   bool _isLoading = true;
+  AppLocalizations get loc => AppLocalizations.of(context);
 
   @override
   void initState() {
@@ -160,6 +162,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final loc = AppLocalizations.of(context);
 
     if (_isLoading) {
       return const Scaffold(
@@ -171,10 +174,10 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
       return Scaffold(
         appBar: AppBar(
           backgroundColor: AppColors.primary,
-          title: const Text('Case Not Found'),
+          title: Text(loc.caseNotFound),
         ),
-        body: const Center(
-          child: Text('Case details not available'),
+        body: Center(
+          child: Text(loc.caseDetailsNotAvailable),
         ),
       );
     }
@@ -196,7 +199,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
               ),
               flexibleSpace: FlexibleSpaceBar(
                 title: Text(
-                  'Case #${caseData['id']}',
+                  '${loc.caseLabel} #${caseData['id']}',
                   style: textTheme.titleLarge?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -217,10 +220,10 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                 labelStyle: textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
-                tabs: const [
-                  Tab(text: 'Overview'),
-                  Tab(text: 'Timeline'),
-                  Tab(text: 'Documents'),
+                tabs: [
+                  Tab(text: loc.overview),
+                  Tab(text: loc.timeline),
+                  Tab(text: loc.documents),
                 ],
               ),
             ),
@@ -277,7 +280,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                     borderRadius: BorderRadius.circular(AppRadius.full),
                   ),
                   child: Text(
-                    'Status: ${caseData['status']}',
+                    loc.statusLabel(caseData['status']),
                     style: textTheme.bodySmall?.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w600,
@@ -286,7 +289,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Filed on ${DateFormat('MMM dd, yyyy').format(caseData['filedDate'])}',
+                  loc.filedOn(DateFormat('MMM dd, yyyy').format(caseData['filedDate'])),
                   style: textTheme.bodySmall?.copyWith(
                     color: Colors.white.withValues(alpha: 0.8),
                   ),
@@ -323,7 +326,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       Text(
-                        'Upcoming Hearing',
+                        loc.upcomingHearing,
                         style: textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: AppColors.error,
@@ -367,8 +370,8 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                   OutlinedButton.icon(
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Add to Calendar - Coming soon'),
+                        SnackBar(
+                          content: Text(loc.addToCalendarComingSoon),
                           backgroundColor: AppColors.secondary,
                         ),
                       );
@@ -377,7 +380,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                       PhosphorIconsRegular.calendarPlus,
                       size: 18,
                     ),
-                    label: const Text('Add to Calendar'),
+                    label: Text(loc.addToCalendar),
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(color: AppColors.primary),
                     ),
@@ -391,7 +394,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
 
           // Assigned Lawyer
           Text(
-            'Assigned Lawyer',
+            loc.assignedLawyer,
             style: textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w600,
               color: AppColors.textSecondary,
@@ -422,10 +425,10 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
               trailing: OutlinedButton.icon(
                 onPressed: () {
                   final lawyerId = (caseData['lawyerId'] ?? '').toString();
-                  if (lawyerId.isEmpty) {
+                    if (lawyerId.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('No lawyer assigned yet'),
+                      SnackBar(
+                        content: Text(loc.noLawyerAssignedYet),
                         backgroundColor: AppColors.warning,
                       ),
                     );
@@ -446,7 +449,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
                   PhosphorIconsRegular.chatCircleText,
                   size: 16,
                 ),
-                label: const Text('Message'),
+                label: Text(loc.message),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.sm,
@@ -461,7 +464,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
 
           // Case Description
           Text(
-            'Case Description',
+            loc.caseDescription,
             style: textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w600,
               color: AppColors.textSecondary,
@@ -498,7 +501,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'The Legal Journey',
+            loc.legalJourney,
             style: textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w700,
               color: AppColors.primary,

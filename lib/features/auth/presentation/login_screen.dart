@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
 
@@ -60,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // Strict Role Check
           if (role != widget.role) {
             await _authService.signOut();
-            throw 'Invalid credentials. Please check your email and password.';
+            throw Exception(AppLocalizations.of(context).invalidCredentialsMessage);
           }
         }
 
@@ -111,7 +112,11 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'This account is a ${role == 'client' ? 'Client' : 'Lawyer'} account. Redirecting you...'),
+              AppLocalizations.of(context).accountRedirecting(
+                role == 'client' ? 'client' : 'lawyer',
+                role == 'client' ? 'Client' : 'Lawyer',
+              ),
+            ),
             backgroundColor: AppColors.secondary,
             duration: const Duration(seconds: 2),
           ),
@@ -149,22 +154,24 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String? _validateEmail(String? value) {
+    final loc = AppLocalizations.of(context);
     if (value == null || value.isEmpty) {
-      return 'Please enter your email';
+      return loc.pleaseEnterYourEmail;
     }
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!emailRegex.hasMatch(value)) {
-      return 'Please enter a valid email';
+      return loc.pleaseEnterValidEmail;
     }
     return null;
   }
 
   String? _validatePassword(String? value) {
+    final loc = AppLocalizations.of(context);
     if (value == null || value.isEmpty) {
-      return 'Please enter your password';
+      return loc.pleaseEnterYourPassword;
     }
     if (value.length < 6) {
-      return 'Password must be at least 6 characters';
+      return loc.passwordMinLength(6);
     }
     return null;
   }
@@ -174,6 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
+    final loc = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -226,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Sign In',
+                          loc.signInTitle,
                           style: textTheme.headlineLarge?.copyWith(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.w700,
@@ -234,7 +242,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
-                          'Continue as ${widget.role}',
+                          loc.continueAs(widget.role),
                           style: textTheme.bodyLarge?.copyWith(
                             color: AppColors.textSecondary,
                           ),
@@ -249,9 +257,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       validator: _validateEmail,
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        hintText: 'Enter your email',
+                        decoration: InputDecoration(
+                        labelText: loc.emailLabel,
+                        hintText: loc.emailHint,
                         prefixIcon: PhosphorIcon(
                           PhosphorIconsRegular.envelope,
                           color: AppColors.textSecondary,
@@ -266,9 +274,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _passwordController,
                       obscureText: !_isPasswordVisible,
                       validator: _validatePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        hintText: 'Enter your password',
+                        decoration: InputDecoration(
+                        labelText: loc.passwordLabel,
+                        hintText: loc.passwordHint,
                         prefixIcon: PhosphorIcon(
                           PhosphorIconsRegular.lock,
                           color: AppColors.textSecondary,
@@ -290,22 +298,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     // Forgot Password
                     Align(
                       alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {
-                          // TODO: Implement forgot password
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Forgot password - Coming soon'),
+                        child: TextButton(
+                          onPressed: () {
+                            // TODO: Implement forgot password
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(loc.forgotPasswordComingSoon),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            loc.forgotPassword,
+                            style: textTheme.labelMedium?.copyWith(
+                              color: colorScheme.primary,
                             ),
-                          );
-                        },
-                        child: Text(
-                          'Forgot Password?',
-                          style: textTheme.labelMedium?.copyWith(
-                            color: colorScheme.primary,
                           ),
                         ),
-                      ),
                     ),
 
                     const SizedBox(height: AppSpacing.lg),
@@ -323,7 +331,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         child: Text(
-                          'Login',
+                          loc.loginButton,
                           style: textTheme.labelLarge?.copyWith(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -340,7 +348,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          "Don't have an account? ",
+                          loc.dontHaveAccount,
                           style: textTheme.bodyMedium?.copyWith(
                             color: AppColors.textSecondary,
                           ),
@@ -359,7 +367,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           child: Text(
-                            'Sign Up',
+                            loc.signUp,
                             style: textTheme.bodyMedium?.copyWith(
                               color: colorScheme.primary,
                               fontWeight: FontWeight.w600,
@@ -384,7 +392,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: AppSpacing.md),
                           child: Text(
-                            'Or continue with',
+                            loc.orContinueWith,
                             style: textTheme.bodySmall?.copyWith(
                               color: AppColors.textSecondary,
                             ),
@@ -412,7 +420,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           size: 24,
                         ),
                         label: Text(
-                          'Sign in with Google',
+                          loc.signInWithGoogle,
                           style: textTheme.labelLarge?.copyWith(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

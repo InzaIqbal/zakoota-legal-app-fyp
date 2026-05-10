@@ -4,7 +4,10 @@ import '../../models/consultation_model.dart';
 import '../../models/consultation_enums.dart';
 import '../../services/consultation_service.dart';
 import '../../services/consultation_utils.dart';
+import '../../../lawyer_auth/services/lawyer_availability_service.dart';
+import '../../../lawyer_auth/models/lawyer_availability_model.dart';
 import '../../../../core/constants/app_constants.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 
 /// Advanced Consultation Request Sheet with all new features
 /// This shows how to use the enhanced ConsultationModel with additional fields
@@ -48,6 +51,9 @@ class _AdvancedConsultationRequestSheetState
   late String? _meetingPlatform;
   late String? _notes;
   bool _isSubmitting = false;
+  bool _isLoadingSlots = false;
+  List<TimeSlot> _availableSlots = [];
+  final LawyerAvailabilityService _availabilityService = LawyerAvailabilityService();
 
   // Controllers
   late TextEditingController _descriptionController;
@@ -72,6 +78,8 @@ class _AdvancedConsultationRequestSheetState
     _meetingLinkController = TextEditingController();
     _locationController = TextEditingController();
     _notesController = TextEditingController();
+
+    _refreshAvailableSlots();
   }
 
   @override
@@ -83,11 +91,32 @@ class _AdvancedConsultationRequestSheetState
     super.dispose();
   }
 
+  Future<void> _refreshAvailableSlots() async {
+    setState(() => _isLoadingSlots = true);
+    try {
+      final slots = await _availabilityService.getAvailableSlots(
+        widget.lawyerId,
+        _selectedDate,
+        _durationMinutes,
+      );
+      if (!mounted) return;
+      setState(() {
+        _availableSlots = slots;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingSlots = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
       expand: false,
-      builder: (context, scrollController) => SingleChildScrollView(
+      builder: (context, scrollController) {
+        final loc = AppLocalizations.of(context);
+        return SingleChildScrollView(
         controller: scrollController,
         child: Padding(
           padding: EdgeInsets.only(
@@ -101,7 +130,7 @@ class _AdvancedConsultationRequestSheetState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Request Consultation',
+                loc.requestConsultation,
                 style: Theme.of(context)
                     .textTheme
                     .headlineSmall
@@ -138,7 +167,7 @@ class _AdvancedConsultationRequestSheetState
 
               // Consultation Type Selection
               Text(
-                'Type of Consultation',
+                loc.meetingPreference,
                 style: Theme.of(context)
                     .textTheme
                     .labelLarge
@@ -160,7 +189,7 @@ class _AdvancedConsultationRequestSheetState
 
               // Description
               Text(
-                'Purpose/Topic',
+                loc.topicBriefDescription,
                 style: Theme.of(context)
                     .textTheme
                     .labelLarge
@@ -170,7 +199,7 @@ class _AdvancedConsultationRequestSheetState
               TextField(
                 controller: _descriptionController,
                 decoration: InputDecoration(
-                  hintText: 'e.g., Discuss case strategy and next steps',
+                  hintText: loc.consultationHint,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
@@ -189,7 +218,7 @@ class _AdvancedConsultationRequestSheetState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Date',
+                          loc.selectDate,
                           style: Theme.of(context)
                               .textTheme
                               .labelSmall
@@ -213,7 +242,7 @@ class _AdvancedConsultationRequestSheetState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Time',
+                          loc.selectTime,
                           style: Theme.of(context)
                               .textTheme
                               .labelSmall
@@ -235,9 +264,53 @@ class _AdvancedConsultationRequestSheetState
               ),
               const SizedBox(height: AppSpacing.md),
 
+              if (_isLoadingSlots)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  child: LinearProgressIndicator(),
+                )
+              else if (_availableSlots.isNotEmpty) ...[
+                Text(
+                  loc.availableSlotsForDate(ConsultationUtils.formatDate(_selectedDate)),
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelLarge
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _availableSlots.map((slot) {
+                    final label = slot.displayTime;
+                    final selected = _selectedTime.hour == slot.startTime.hour &&
+                        _selectedTime.minute == slot.startTime.minute;
+                    return ChoiceChip(
+                      selected: selected,
+                      label: Text(label),
+                      onSelected: (_) {
+                        setState(() {
+                          _selectedTime = TimeOfDay(
+                            hour: slot.startTime.hour,
+                            minute: slot.startTime.minute,
+                          );
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ] else ...[
+                Text(
+                  loc.noAvailableSlotsMessage,
+                  style: const TextStyle(color: AppColors.error),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+
               // Duration
               Text(
-                'Duration',
+                loc.duration,
                 style: Theme.of(context)
                     .textTheme
                     .labelLarge
@@ -255,6 +328,7 @@ class _AdvancedConsultationRequestSheetState
                       label: ConsultationUtils.getDurationText(_durationMinutes),
                       onChanged: (value) {
                         setState(() => _durationMinutes = value.toInt());
+                        _refreshAvailableSlots();
                       },
                     ),
                   ),
@@ -283,7 +357,7 @@ class _AdvancedConsultationRequestSheetState
               // Meeting Details (conditional based on type)
               if (_type == ConsultationType.video) ...[
                 Text(
-                  'Video Meeting Details',
+                  loc.videoMeetingDetails,
                   style: Theme.of(context)
                       .textTheme
                       .labelLarge
@@ -292,8 +366,8 @@ class _AdvancedConsultationRequestSheetState
                 const SizedBox(height: AppSpacing.sm),
                 TextField(
                   controller: _meetingLinkController,
-                  decoration: InputDecoration(
-                    hintText: 'Meeting link (Zoom, Google Meet, etc.)',
+                    decoration: InputDecoration(
+                    hintText: loc.meetingLinkHint,
                     prefixIcon: const Icon(Icons.link, size: 16),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -322,7 +396,7 @@ class _AdvancedConsultationRequestSheetState
                 ),
               ] else ...[
                 Text(
-                  'Meeting Location',
+                  loc.meetingLocation,
                   style: Theme.of(context)
                       .textTheme
                       .labelLarge
@@ -331,8 +405,8 @@ class _AdvancedConsultationRequestSheetState
                 const SizedBox(height: AppSpacing.sm),
                 TextField(
                   controller: _locationController,
-                  decoration: InputDecoration(
-                    hintText: 'Address or location details',
+                    decoration: InputDecoration(
+                    hintText: loc.meetingLocationHint,
                     prefixIcon: const Icon(Icons.location_on, size: 16),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -346,7 +420,7 @@ class _AdvancedConsultationRequestSheetState
 
               // Additional Notes
               Text(
-                'Additional Notes (Optional)',
+                loc.additionalNotesOptional,
                 style: Theme.of(context)
                     .textTheme
                     .labelLarge
@@ -356,7 +430,7 @@ class _AdvancedConsultationRequestSheetState
               TextField(
                 controller: _notesController,
                 decoration: InputDecoration(
-                  hintText: 'Any special instructions or requirements...',
+                  hintText: loc.additionalNotesHint,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
@@ -383,7 +457,7 @@ class _AdvancedConsultationRequestSheetState
                               AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
-                    : const Text('Send Consultation Request'),
+                    : Text(loc.sendRequest),
               ),
               const SizedBox(height: AppSpacing.lg),
             ],
@@ -429,7 +503,10 @@ class _AdvancedConsultationRequestSheetState
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 90)),
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+      await _refreshAvailableSlots();
+    }
   }
 
   Future<void> _pickTime() async {
@@ -443,7 +520,7 @@ class _AdvancedConsultationRequestSheetState
   Future<void> _submitRequest() async {
     // Validate inputs
     if (_description.isEmpty) {
-      _showError('Please enter a consultation topic');
+      _showError(loc.pleaseEnterConsultationTopic);
       return;
     }
 
@@ -472,6 +549,26 @@ class _AdvancedConsultationRequestSheetState
         _selectedTime.hour,
         _selectedTime.minute,
       );
+
+      final withinAvailability = await _availabilityService.isTimeWithinAvailability(
+        widget.lawyerId,
+        scheduledAt,
+        _durationMinutes,
+      );
+      if (!withinAvailability) {
+        _showError(loc.lawyerNotAvailable);
+        return;
+      }
+
+      final hasConflict = await ConsultationService().checkTimeSlotConflict(
+        widget.lawyerId,
+        scheduledAt,
+        _durationMinutes,
+      );
+      if (hasConflict) {
+        _showError(loc.timeSlotConflictMessage);
+        return;
+      }
 
       // Create consultation with all new fields
       final consultation = ConsultationModel(
@@ -506,8 +603,8 @@ class _AdvancedConsultationRequestSheetState
 
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Consultation request sent!'),
+          SnackBar(
+            content: Text(loc.consultationRequestSent),
             backgroundColor: AppColors.success,
           ),
         );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
 
@@ -27,13 +28,15 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
   bool _isLoading = false;
   String? _errorMessage;
 
-  final List<String> _professions = [
-    "Student",
-    "Business Owner",
-    "Employee",
-    "Housewife",
-    "Other"
-  ];
+  List<String> _buildProfessions(AppLocalizations loc) {
+    return [
+      loc.professionStudent,
+      loc.professionBusinessOwner,
+      loc.professionEmployee,
+      loc.professionHousewife,
+      loc.professionOther,
+    ];
+  }
 
   @override
   void initState() {
@@ -74,12 +77,12 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
     super.dispose();
   }
 
-  Future<void> _handleSubmit() async {
+  Future<void> _handleSubmit(AppLocalizations loc) async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedProfession == null) {
       setState(() {
-        _errorMessage = 'Please select a profession.';
+        _errorMessage = loc.pleaseProfession;
       });
       return;
     }
@@ -122,10 +125,13 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final professions = _buildProfessions(loc);
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Complete Profile'),
+        title: Text(loc.profileSetupTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -156,7 +162,7 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        'Step 1 of 2',
+                        loc.profileSetupStep1of2,
                         style: TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.bold,
@@ -169,7 +175,7 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                 const SizedBox(height: AppSpacing.md),
 
                 Text(
-                  'Tell us about yourself',
+                  loc.tellUsAboutYourself,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary,
@@ -178,7 +184,7 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Please provide your details to proceed with verification.',
+                  loc.provideDetailsToVerify,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -205,13 +211,13 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                 TextFormField(
                   controller: _nameController,
                   decoration: InputDecoration(
-                    labelText: 'Full Name',
+                    labelText: loc.fullNameLabel,
                     prefixIcon: PhosphorIcon(PhosphorIcons.user()),
                     border: const OutlineInputBorder(),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty)
-                      return 'Enter your full name';
+                      return loc.pleaseEnterYourName;
                     return null;
                   },
                 ),
@@ -221,7 +227,7 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                 TextFormField(
                   controller: _ageController,
                   decoration: InputDecoration(
-                    labelText: 'Age',
+                    labelText: loc.ageLabel,
                     prefixIcon: PhosphorIcon(PhosphorIcons.hourglass()),
                     border: const OutlineInputBorder(),
                   ),
@@ -231,9 +237,9 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                     LengthLimitingTextInputFormatter(3),
                   ],
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Enter your age';
+                    if (value == null || value.isEmpty) return loc.pleaseEnterYourAge;
                     final age = int.tryParse(value);
-                    if (age == null || age < 18) return 'Must be 18+';
+                    if (age == null || age < 18) return loc.must18Plus;
                     return null;
                   },
                 ),
@@ -243,13 +249,13 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                 TextFormField(
                   controller: _addressController,
                   decoration: InputDecoration(
-                    labelText: 'Address',
+                    labelText: loc.addressLabel,
                     prefixIcon: PhosphorIcon(PhosphorIcons.mapPin()),
                     border: const OutlineInputBorder(),
                   ),
                   maxLines: 2,
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Enter address';
+                    if (value == null || value.isEmpty) return loc.pleaseEnterAddress;
                     return null;
                   },
                 ),
@@ -259,11 +265,11 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                 DropdownButtonFormField<String>(
                   value: _selectedProfession,
                   decoration: InputDecoration(
-                    labelText: 'Profession',
+                    labelText: loc.professionLabel,
                     prefixIcon: PhosphorIcon(PhosphorIcons.briefcase()),
                     border: const OutlineInputBorder(),
                   ),
-                  items: _professions.map((String profession) {
+                  items: professions.map((String profession) {
                     return DropdownMenuItem<String>(
                       value: profession,
                       child: Text(profession),
@@ -275,7 +281,7 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                     });
                   },
                   validator: (value) =>
-                      value == null ? 'Select profession' : null,
+                      value == null ? loc.selectProfession : null,
                 ),
                 const SizedBox(height: AppSpacing.md),
 
@@ -283,8 +289,8 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                 TextFormField(
                   controller: _cnicController,
                   decoration: InputDecoration(
-                    labelText: 'CNIC Number',
-                    hintText: 'XXXXX-XXXXXXX-X',
+                    labelText: loc.cnicNumberLabel,
+                    hintText: loc.cnicNumberHint,
                     prefixIcon:
                         PhosphorIcon(PhosphorIcons.identificationCard()),
                     border: const OutlineInputBorder(),
@@ -294,8 +300,8 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                     CnicInputFormatter(),
                   ],
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Enter CNIC';
-                    if (value.length != 15) return 'Invalid Format (13 digits)';
+                    if (value == null || value.isEmpty) return loc.pleaseEnterCnic;
+                    if (value.length != 15) return loc.invalidCnicFormat;
                     return null;
                   },
                 ),
@@ -305,7 +311,7 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                 SizedBox(
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _handleSubmit,
+                    onPressed: _isLoading ? null : () => _handleSubmit(loc),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
@@ -322,9 +328,9 @@ class _ClientProfileSetupScreenState extends State<ClientProfileSetupScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text(
-                            'Next: Verify Identity',
-                            style: TextStyle(
+                        : Text(
+                            loc.nextVerifyIdentity,
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),

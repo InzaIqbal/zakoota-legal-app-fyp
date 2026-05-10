@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/ad_booking_model.dart';
+import '../../wallet/services/wallet_service.dart';
 
 class AdBookingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final WalletService _walletService = WalletService();
 
   CollectionReference<Map<String, dynamic>> get _bookingsRef =>
       _firestore.collection('ad_bookings');
@@ -26,90 +28,95 @@ class AdBookingService {
     });
   }
 
-  Future<String> chargeAndCreateBooking({
+  /// Hold ad booking payment from client
+  Future<String> holdAdBookingPayment({
     required String adId,
     required String lawyerId,
     required String clientId,
     required double amount,
   }) async {
     final bookingId = _bookingsRef.doc().id;
+    final operationId = 'ad_booking_$bookingId';
 
+    // Hold funds from client
+    await _walletService.holdFunds(
+      userId: clientId,
+      amount: amount,
+      operationId: operationId,
+      reason: 'Ad booking payment',
+      referenceType: 'ad_booking',
+      referenceId: bookingId,
+      metadata: {'adId': adId, 'lawyerId': lawyerId},
+    );
+
+    // Create booking in held state
     await _firestore.runTransaction((tx) async {
-      final clientRef = _firestore.collection('users').doc(clientId);
-      final lawyerRef = _firestore.collection('users').doc(lawyerId);
-      final clientDoc = await tx.get(clientRef);
-      final lawyerDoc = await tx.get(lawyerRef);
-      if (!clientDoc.exists) {
-        throw Exception('Client profile not found');
-      }
-      if (!lawyerDoc.exists) {
-        throw Exception('Lawyer profile not found');
-      }
-
-      final clientBalance = (clientDoc.data()?['walletBalance'] ?? 0).toDouble();
-      if (clientBalance < amount) {
-        throw Exception('Insufficient wallet balance');
-      }
-      final lawyerBalance = (lawyerDoc.data()?['walletBalance'] ?? 0).toDouble();
-      final now = Timestamp.fromDate(DateTime.now());
-
-      tx.update(clientRef, {
-        'walletBalance': clientBalance - amount,
-        'lastActivity': now,
-      });
-
-      tx.update(lawyerRef, {
-        'walletBalance': lawyerBalance + amount,
-        'lastActivity': now,
-      });
-
       tx.set(_bookingsRef.doc(bookingId), {
         'adId': adId,
         'lawyerId': lawyerId,
         'clientId': clientId,
         'amount': amount,
-        'paymentStatus': 'paid',
+        'paymentStatus': 'held',
+        'holdOperationId': operationId,
         'setupStatus': 'pending',
-        'createdAt': now,
-        'updatedAt': now,
+        'createdAt': Timestamp.fromDate(DateTime.now()),
+        'updatedAt': Timestamp.fromDate(DateTime.now()),
       });
 
       // Increment bookings counter on the ad document
       final adRef = _firestore.collection('lawyer_ads').doc(adId);
       tx.update(adRef, {'bookings': FieldValue.increment(1)});
-
-      final clientTxRef = clientRef.collection('wallet_transactions').doc();
-      final lawyerTxRef = lawyerRef.collection('wallet_transactions').doc();
-      tx.set(clientTxRef, {
-        'operationId': 'ad_booking_$bookingId',
-        'userId': clientId,
-        'type': 'debit',
-        'reason': 'ad_booking_payment',
-        'amount': amount,
-        'currency': 'PKR',
-        'status': 'completed',
-        'counterpartyUserId': lawyerId,
-        'referenceType': 'ad_booking',
-        'referenceId': bookingId,
-        'metadata': {'adId': adId},
-        'createdAt': now,
-      });
-      tx.set(lawyerTxRef, {
-        'operationId': 'ad_booking_$bookingId',
-        'userId': lawyerId,
-        'type': 'credit',
-        'reason': 'ad_booking_received',
-        'amount': amount,
-        'currency': 'PKR',
-        'status': 'completed',
-        'counterpartyUserId': clientId,
-        'referenceType': 'ad_booking',
-        'referenceId': bookingId,
-        'metadata': {'adId': adId},
-        'createdAt': now,
-      });
     });
 
     return bookingId;
+  }
+
+  /// Release held ad booking payment to lawyer
+  Future<void> releaseAdBookingPayment({
+    required String bookingId,
+    required String clientId,
+    required String lawyerId,
+    required double amount,
+    required String holdOperationId,
+  }) async {
+    final operationId = 'ad_release_${bookingId}_${DateTime.now().millisecondsSinceEpoch}';
+
+    await _walletService.releaseHeldFunds(
+      fromUserId: clientId,
+      toUserId: lawyerId,
+      amount: amount,
+      operationId: operationId,
+      releaseReason: 'Ad booking payment released',
+      originalHoldOperationId: holdOperationId,
+    );
+
+    await _bookingsRef.doc(bookingId).update({
+      'paymentStatus': 'released',
+      'releaseOperationId': operationId,
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  /// Refund held ad booking payment to client
+  Future<void> refundAdBookingPayment({
+    required String bookingId,
+    required String clientId,
+    required double amount,
+    required String holdOperationId,
+  }) async {
+    final operationId = 'ad_refund_${bookingId}_${DateTime.now().millisecondsSinceEpoch}';
+
+    await _walletService.refundHeldFunds(
+      userId: clientId,
+      amount: amount,
+      operationId: operationId,
+      originalHoldOperationId: holdOperationId,
+      refundReason: 'Ad booking refunded',
+    );
+
+    await _bookingsRef.doc(bookingId).update({
+      'paymentStatus': 'refunded',
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
   }
 }

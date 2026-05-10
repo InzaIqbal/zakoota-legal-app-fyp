@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../providers/locale_provider.dart';
 
-class LanguageSettingsScreen extends StatefulWidget {
+class LanguageSettingsScreen extends ConsumerStatefulWidget {
   const LanguageSettingsScreen({super.key});
 
   @override
-  State<LanguageSettingsScreen> createState() => _LanguageSettingsScreenState();
+  ConsumerState<LanguageSettingsScreen> createState() =>
+      _LanguageSettingsScreenState();
 }
 
-class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
+class _LanguageSettingsScreenState extends ConsumerState<LanguageSettingsScreen> {
   String _selectedLanguage = 'en';
 
   final List<Map<String, String>> _languages = [
@@ -21,6 +25,11 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final loc = AppLocalizations.of(context);
+    final current = ref.watch(localeNotifierProvider);
+    if (current != null && _selectedLanguage != current.languageCode) {
+      _selectedLanguage = current.languageCode;
+    }
 
     return Scaffold(
       backgroundColor: AppColors.primary,
@@ -32,7 +41,7 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
           onPressed: () => context.pop(),
         ),
         title: Text(
-          'Language',
+          loc.languageTitle,
           style: theme.textTheme.headlineSmall?.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.w700,
@@ -50,14 +59,14 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
         child: Column(
           children: [
             const SizedBox(height: AppSpacing.lg),
-            ..._languages.map((lang) => _buildLanguageItem(lang)),
+            ..._languages.map((lang) => _buildLanguageItem(lang, loc)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLanguageItem(Map<String, String> lang) {
+  Widget _buildLanguageItem(Map<String, String> lang, AppLocalizations loc) {
     final isSelected = _selectedLanguage == lang['code'];
 
     return Container(
@@ -71,12 +80,14 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
             : null,
       ),
       child: ListTile(
-        onTap: () {
-          setState(() => _selectedLanguage = lang['code']!);
-          // In a real app, this would trigger a localization update
+        onTap: () async {
+          final code = lang['code']!;
+          setState(() => _selectedLanguage = code);
+          await ref.read(localeNotifierProvider.notifier).setLocale(Locale(code));
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Language changed to ${lang['name']}'),
+              content: Text('${loc.languageTitle}: ${lang['name']}'),
               backgroundColor: AppColors.success,
               behavior: SnackBarBehavior.floating,
             ),

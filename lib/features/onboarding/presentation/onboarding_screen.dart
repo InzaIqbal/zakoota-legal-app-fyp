@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import 'widgets/onboarding_content.dart';
 import 'widgets/dots_indicator.dart';
@@ -17,23 +18,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<Map<String, dynamic>> _slides = [
-    {
-      'icon': PhosphorIconsRegular.magnifyingGlass,
-      'title': 'Find Verified Lawyers',
-      'description': 'Connect with top legal experts instantly.',
-    },
-    {
-      'icon': PhosphorIconsRegular.gavel,
-      'title': 'Track Your Case',
-      'description': 'Real-time updates on hearings and documents.',
-    },
-    {
-      'icon': PhosphorIconsRegular.shieldCheck,
-      'title': 'Secure Payments',
-      'description': 'Escrow protection for your peace of mind.',
-    },
-  ];
+  List<Map<String, dynamic>> _buildSlides(AppLocalizations loc) {
+    return [
+      {
+        'icon': PhosphorIconsRegular.magnifyingGlass,
+        'title': loc.findVerifiedLawyers,
+        'description': loc.connectWithTopExperts,
+      },
+      {
+        'icon': PhosphorIconsRegular.gavel,
+        'title': loc.trackYourCase,
+        'description': loc.realtimeUpdates,
+      },
+      {
+        'icon': PhosphorIconsRegular.shieldCheck,
+        'title': loc.securePayments,
+        'description': loc.escrowProtection,
+      },
+    ];
+  }
 
   @override
   void dispose() {
@@ -51,8 +54,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     context.go('/welcome');
   }
 
-  void _nextPage() {
-    if (_currentPage < _slides.length - 1) {
+  void _nextPage(int slideCount) {
+    if (_currentPage < slideCount - 1) {
       _pageController.animateToPage(
         _currentPage + 1,
         duration: AppDurations.medium,
@@ -65,6 +68,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final slides = _buildSlides(loc);
+
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: Stack(
@@ -111,7 +117,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.white.withValues(alpha: 0.92),
                         ),
-                        child: const Text('Skip'),
+                        child: Text(loc.skip),
                       ),
                     ],
                   ),
@@ -120,9 +126,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: PageView.builder(
                     controller: _pageController,
                     onPageChanged: _onPageChanged,
-                    itemCount: _slides.length,
+                    itemCount: slides.length,
                     itemBuilder: (context, index) {
-                      final slide = _slides[index];
+                      final slide = slides[index];
                       return OnboardingContent(
                         icon: slide['icon'] as PhosphorIconData,
                         title: slide['title'] as String,
@@ -154,21 +160,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     children: [
                       DotsIndicator(
                         currentPage: _currentPage,
-                        pageCount: _slides.length,
+                        pageCount: slides.length,
                       ),
                       const Spacer(),
                       ElevatedButton.icon(
-                        onPressed: _nextPage,
+                        onPressed: () => _nextPage(slides.length),
                         icon: PhosphorIcon(
-                          _currentPage == _slides.length - 1
+                          _currentPage == slides.length - 1
                               ? PhosphorIconsRegular.checkCircle
                               : PhosphorIconsRegular.arrowRight,
                           size: 18,
                         ),
                         label: Text(
-                          _currentPage == _slides.length - 1
-                              ? 'Get Started'
-                              : 'Next',
+                          _currentPage == slides.length - 1
+                              ? loc.getStarted
+                              : loc.next,
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.secondary,

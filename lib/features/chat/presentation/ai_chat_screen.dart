@@ -115,7 +115,10 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft),
+          icon: const PhosphorIcon(
+            PhosphorIconsRegular.arrowLeft,
+            color: Colors.white,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(

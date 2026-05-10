@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_constants.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/services/auth_service.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -102,10 +103,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Create Account'),
+        title: Text(loc.createAccountTitle),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -117,7 +119,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               children: [
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  'Let\'s Get Started',
+                  loc.letsGetStarted,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary,
@@ -126,7 +128,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Create an account to find the best lawyers.',
+                  loc.createAccountDescription,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -152,15 +154,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 // Name Field
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full Name',
-                    prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: loc.fullNameLabel,
+                    prefixIcon: const Icon(Icons.person_outline),
+                    border: const OutlineInputBorder(),
                   ),
                   textCapitalization: TextCapitalization.words,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter your name';
+                      return loc.pleaseEnterYourName;
                     }
                     return null;
                   },
@@ -170,18 +172,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 // Email Field
                 TextFormField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email Address',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: loc.emailAddressLabel,
+                    prefixIcon: const Icon(Icons.email_outlined),
+                    border: const OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
+                      return loc.pleaseEnterYourEmailAddress;
                     }
                     if (!value.contains('@')) {
-                      return 'Please enter a valid email';
+                      return loc.pleaseEnterValidEmail;
                     }
                     return null;
                   },
@@ -191,18 +193,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 // Password Field
                 TextFormField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: loc.passwordLabel,
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    border: const OutlineInputBorder(),
                   ),
                   obscureText: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter a password';
+                      return loc.pleaseEnterPassword;
                     }
                     if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
+                      return loc.passwordMinLength(6);
                     }
                     return null;
                   },
@@ -230,9 +232,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text(
-                            'Create Account',
-                            style: TextStyle(
+                        : Text(
+                            loc.createAccountButton,
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
@@ -255,7 +257,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       padding:
                           const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                       child: Text(
-                        'Or continue with',
+                        loc.orContinueWith,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: AppColors.textSecondary,
                             ),
@@ -283,7 +285,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       size: 24,
                     ),
                     label: Text(
-                      'Sign up with Google',
+                      loc.signUpWithGoogle,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -305,12 +307,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      'Already have an account?',
+                      loc.alreadyHaveAccount,
                       style: TextStyle(color: AppColors.textSecondary),
                     ),
                     TextButton(
                       onPressed: () => context.push('/login'),
-                      child: const Text('Log In'),
+                      child: Text(loc.logIn),
                     ),
                   ],
                 ),

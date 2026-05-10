@@ -9,6 +9,7 @@ import '../../chat/models/message_model.dart';
 import '../../cases/models/consultation_model.dart';
 import '../../cases/services/consultation_service.dart';
 import '../../wallet/services/wallet_service.dart';
+import '../../lawyer_auth/services/lawyer_availability_service.dart';
 
 /// Booking Summary Screen - Review and confirm payment
 class BookingSummaryScreen extends StatefulWidget {
@@ -67,6 +68,8 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     setState(() => _isProcessing = true);
 
     var debitDone = false;
+    String? consultationId;
+    String? operationId;
     try {
 
       // Check for existing active consultations between these two users
@@ -90,7 +93,39 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
       final clientName = userData?['fullName'] ?? 'Client';
       final clientAvatar = userData?['photoUrl'];
 
-      // 1. Get or Create Chat
+      // compute scheduled time and perform availability/conflict checks
+      final scheduledAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        _parseHour(time),
+        _parseMinute(time),
+      );
+
+      final durationMinutes = (widget.bookingData['durationMinutes'] as int?) ?? 30;
+
+      // 1. Check lawyer availability and time-slot conflicts before charging
+      final availabilityService = LawyerAvailabilityService();
+      final isAvailable = await availabilityService.isTimeWithinAvailability(
+        lawyerId,
+        scheduledAt,
+        durationMinutes,
+      );
+      if (!isAvailable) {
+        throw Exception('Selected time is outside the lawyer\'s availability. Please pick another slot.');
+      }
+
+      final consultationService = ConsultationService();
+      final hasConflict = await consultationService.checkTimeSlotConflict(
+        lawyerId,
+        scheduledAt,
+        durationMinutes,
+      );
+      if (hasConflict) {
+        throw Exception('The selected time conflicts with another consultation. Please pick a different time.');
+      }
+
+      // 2. Get or Create Chat
       final chatService = ChatService();
       final chat = await chatService.getOrCreateChat(
         clientId: currentUser.uid,
@@ -104,16 +139,14 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
       if (!context.mounted) return;
 
       // Generate Consultation ID early so we can pass it to message
-      final consultationId = FirebaseFirestore.instance.collection('tmp').doc().id;
-      final operationId =
-          'consultation_booking_${currentUser.uid}_$consultationId';
+        consultationId = FirebaseFirestore.instance.collection('tmp').doc().id;
+        operationId = 'consultation_booking_${currentUser.uid}_$consultationId';
 
-      await _walletService.debit(
+      await _walletService.holdFunds(
         userId: currentUser.uid,
         amount: price.toDouble(),
         reason: 'consultation_booking',
         operationId: operationId,
-        counterpartyUserId: lawyerId,
         referenceType: 'consultation',
         referenceId: consultationId,
         metadata: {
@@ -122,7 +155,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
         },
       );
       if (!context.mounted) return;
-      debitDone = true;
+      debitDone = true; // now indicates funds held
 
       // 2. Create Consultation Message
       final message = MessageModel(
@@ -149,16 +182,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
       if (!context.mounted) return;
 
       // 4. Create Consultation Record for the Consultations tab
-      final consultationService = ConsultationService();
       
-      final scheduledAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        _parseHour(time),
-        _parseMinute(time),
-      );
-
       final consultation = ConsultationModel(
         id: consultationId,
         caseId: 'standalone',
@@ -171,6 +195,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
         lawyerId: lawyerId,
         clientAvatar: clientAvatar,
         lawyerAvatar: lawyerAvatar,
+        durationMinutes: durationMinutes,
         type: meetingType == 'online' ? 'video' : 'in_person',
         description: topic,
         status: 'pending',
@@ -194,16 +219,15 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
 
     } catch (e) {
       if (debitDone) {
-        // Best-effort rollback if debit happened and later steps failed.
+        // Best-effort rollback: refund the held funds
         try {
-          final consultationId = FirebaseFirestore.instance.collection('tmp').doc().id;
-          await _walletService.credit(
+          final refundOpId = 'consultation_refund_${currentUser.uid}_${DateTime.now().microsecondsSinceEpoch}';
+          await _walletService.refundHeldFunds(
             userId: currentUser.uid,
             amount: (widget.bookingData['price'] as num).toDouble(),
-            reason: 'consultation_booking_refund',
-            operationId:
-                'consultation_refund_${currentUser.uid}_${DateTime.now().microsecondsSinceEpoch}',
-            metadata: {'cause': 'booking_create_failed', 'tempId': consultationId},
+            operationId: refundOpId,
+            originalHoldOperationId: operationId!,
+            refundReason: 'consultation_booking_refund',
           );
         } catch (_) {}
       }

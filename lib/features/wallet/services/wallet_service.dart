@@ -382,4 +382,283 @@ class WalletService {
       });
     });
   }
+
+  /// Hold funds in escrow (move from walletBalance -> heldBalance)
+  Future<void> holdFunds({
+    required String userId,
+    required double amount,
+    required String reason,
+    required String operationId,
+    String? referenceType,
+    String? referenceId,
+    Map<String, dynamic> metadata = const {},
+  }) async {
+    if (amount <= 0) throw Exception('Amount must be greater than zero');
+
+    await _firestore.runTransaction((tx) async {
+      final opRef = _operationRef(operationId);
+      final opDoc = await tx.get(opRef);
+      if (opDoc.exists) return;
+
+      final userRef = _userRef(userId);
+      final userDoc = await tx.get(userRef);
+      if (!userDoc.exists) throw Exception('User not found');
+
+      final currentBalance = (userDoc.data()?['walletBalance'] ?? 0).toDouble();
+      final currentHeld = (userDoc.data()?['heldBalance'] ?? 0).toDouble();
+      if (currentBalance < amount) throw Exception('Insufficient wallet balance');
+
+      final nextBalance = currentBalance - amount;
+      final nextHeld = currentHeld + amount;
+
+      final txDoc = _txRef(userId).doc();
+      final walletTx = WalletTransactionModel(
+        id: txDoc.id,
+        operationId: operationId,
+        userId: userId,
+        type: WalletTxType.debit,
+        reason: reason,
+        amount: amount,
+        currency: 'PKR',
+        status: 'held',
+        counterpartyUserId: null,
+        referenceType: referenceType,
+        referenceId: referenceId,
+        metadata: metadata,
+        createdAt: DateTime.now(),
+      );
+
+      final holdRef = _firestore.collection('wallet_holds').doc(operationId);
+
+      tx.update(userRef, {
+        'walletBalance': nextBalance,
+        'heldBalance': nextHeld,
+        'lastActivity': Timestamp.fromDate(DateTime.now()),
+      });
+
+      tx.set(txDoc, walletTx.toMap());
+
+      tx.set(holdRef, {
+        'operationId': operationId,
+        'userId': userId,
+        'amount': amount,
+        'currency': 'PKR',
+        'status': 'held',
+        'reason': reason,
+        'referenceType': referenceType,
+        'referenceId': referenceId,
+        'metadata': metadata,
+        'createdAt': Timestamp.fromDate(DateTime.now()),
+      });
+
+      tx.set(opRef, {
+        'operationId': operationId,
+        'type': 'hold',
+        'userId': userId,
+        'amount': amount,
+        'createdAt': Timestamp.fromDate(DateTime.now()),
+      });
+    });
+  }
+
+  /// Release held funds to recipient (from heldBalance -> recipient wallet)
+  Future<void> releaseHeldFunds({
+    required String fromUserId,
+    required String toUserId,
+    required double amount,
+    required String operationId,
+    required String releaseReason,
+    required String originalHoldOperationId,
+    Map<String, dynamic> metadata = const {},
+  }) async {
+    if (amount <= 0) throw Exception('Amount must be greater than zero');
+    if (fromUserId == toUserId) throw Exception('Invalid transfer parties');
+
+    await _firestore.runTransaction((tx) async {
+      final opRef = _operationRef(operationId);
+      final opDoc = await tx.get(opRef);
+      if (opDoc.exists) return;
+
+      final holdRef = _firestore.collection('wallet_holds').doc(originalHoldOperationId);
+      final holdDoc = await tx.get(holdRef);
+      if (!holdDoc.exists) throw Exception('Hold not found');
+      final holdData = holdDoc.data()!;
+      if (holdData['status'] != 'held') throw Exception('Hold already processed');
+
+      final fromRef = _userRef(fromUserId);
+      final toRef = _userRef(toUserId);
+
+      final fromDoc = await tx.get(fromRef);
+      final toDoc = await tx.get(toRef);
+      if (!fromDoc.exists || !toDoc.exists) throw Exception('Account not found');
+
+      final currentHeld = (fromDoc.data()?['heldBalance'] ?? 0).toDouble();
+      if (currentHeld < amount) throw Exception('Held balance insufficient');
+      final newHeld = currentHeld - amount;
+
+      final toBalance = (toDoc.data()?['walletBalance'] ?? 0).toDouble();
+      final newToBalance = toBalance + amount;
+
+      final now = DateTime.now();
+
+      // Update balances
+      tx.update(fromRef, {
+        'heldBalance': newHeld,
+        'lastActivity': Timestamp.fromDate(now),
+      });
+      tx.update(toRef, {
+        'walletBalance': newToBalance,
+        'lastActivity': Timestamp.fromDate(now),
+      });
+
+      // Create transaction records
+      final debitTxRef = _txRef(fromUserId).doc();
+      final creditTxRef = _txRef(toUserId).doc();
+
+      tx.set(
+        debitTxRef,
+        WalletTransactionModel(
+          id: debitTxRef.id,
+          operationId: operationId,
+          userId: fromUserId,
+          type: WalletTxType.debit,
+          reason: releaseReason,
+          amount: amount,
+          currency: 'PKR',
+          status: 'released',
+          counterpartyUserId: toUserId,
+          referenceType: 'hold_release',
+          referenceId: originalHoldOperationId,
+          metadata: metadata,
+          createdAt: now,
+        ).toMap(),
+      );
+
+      tx.set(
+        creditTxRef,
+        WalletTransactionModel(
+          id: creditTxRef.id,
+          operationId: operationId,
+          userId: toUserId,
+          type: WalletTxType.credit,
+          reason: releaseReason,
+          amount: amount,
+          currency: 'PKR',
+          status: 'completed',
+          counterpartyUserId: fromUserId,
+          referenceType: 'hold_release',
+          referenceId: originalHoldOperationId,
+          metadata: metadata,
+          createdAt: now,
+        ).toMap(),
+      );
+
+      // Transfer record
+      final transferRef = _firestore.collection('wallet_transfers').doc();
+      tx.set(transferRef, {
+        'transferId': transferRef.id,
+        'operationId': operationId,
+        'fromUserId': fromUserId,
+        'toUserId': toUserId,
+        'amount': amount,
+        'currency': 'PKR',
+        'status': 'completed',
+        'reason': releaseReason,
+        'originalHoldOperationId': originalHoldOperationId,
+        'metadata': metadata,
+        'createdAt': Timestamp.fromDate(now),
+      });
+
+      // Update hold
+      tx.update(holdRef, {
+        'status': 'released',
+        'releasedAt': Timestamp.fromDate(now),
+        'toUserId': toUserId,
+      });
+
+      tx.set(opRef, {
+        'operationId': operationId,
+        'type': 'release',
+        'fromUserId': fromUserId,
+        'toUserId': toUserId,
+        'amount': amount,
+        'createdAt': Timestamp.fromDate(now),
+      });
+    });
+  }
+
+  /// Refund held funds back to the original user (heldBalance -> walletBalance)
+  Future<void> refundHeldFunds({
+    required String userId,
+    required double amount,
+    required String operationId,
+    required String originalHoldOperationId,
+    required String refundReason,
+    Map<String, dynamic> metadata = const {},
+  }) async {
+    if (amount <= 0) throw Exception('Amount must be greater than zero');
+
+    await _firestore.runTransaction((tx) async {
+      final opRef = _operationRef(operationId);
+      final opDoc = await tx.get(opRef);
+      if (opDoc.exists) return;
+
+      final holdRef = _firestore.collection('wallet_holds').doc(originalHoldOperationId);
+      final holdDoc = await tx.get(holdRef);
+      if (!holdDoc.exists) throw Exception('Hold not found');
+      final holdData = holdDoc.data()!;
+      if (holdData['status'] != 'held') throw Exception('Hold already processed');
+
+      final userRef = _userRef(userId);
+      final userDoc = await tx.get(userRef);
+      if (!userDoc.exists) throw Exception('User not found');
+
+      final currentHeld = (userDoc.data()?['heldBalance'] ?? 0).toDouble();
+      if (currentHeld < amount) throw Exception('Held balance insufficient');
+      final newHeld = currentHeld - amount;
+
+      final currentBalance = (userDoc.data()?['walletBalance'] ?? 0).toDouble();
+      final newBalance = currentBalance + amount;
+
+      final now = DateTime.now();
+
+      final creditTxRef = _txRef(userId).doc();
+      tx.update(userRef, {
+        'walletBalance': newBalance,
+        'heldBalance': newHeld,
+        'lastActivity': Timestamp.fromDate(now),
+      });
+
+      tx.set(
+        creditTxRef,
+        WalletTransactionModel(
+          id: creditTxRef.id,
+          operationId: operationId,
+          userId: userId,
+          type: WalletTxType.credit,
+          reason: refundReason,
+          amount: amount,
+          currency: 'PKR',
+          status: 'completed',
+          referenceType: 'hold_refund',
+          referenceId: originalHoldOperationId,
+          metadata: metadata,
+          createdAt: now,
+        ).toMap(),
+      );
+
+      tx.update(holdRef, {
+        'status': 'refunded',
+        'refundedAt': Timestamp.fromDate(now),
+      });
+
+      tx.set(opRef, {
+        'operationId': operationId,
+        'type': 'refund',
+        'userId': userId,
+        'amount': amount,
+        'createdAt': Timestamp.fromDate(now),
+      });
+    });
+  }
 }

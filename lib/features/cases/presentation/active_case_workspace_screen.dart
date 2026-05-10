@@ -4,10 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../models/case_model.dart';
 import '../models/consultation_model.dart';
 import '../services/consultation_service.dart';
+import '../../lawyer_auth/services/lawyer_availability_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../events/models/event_model.dart';
@@ -59,6 +61,10 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   LawyerProfile? _lawyerProfile;
   bool _isLoadingData = true;
   bool _isUploadingFile = false;
+  bool _isPayingMilestone = false;
+  bool _isPayingInvoice = false;
+
+  AppLocalizations get loc => AppLocalizations.of(context);
 
   @override
   void initState() {
@@ -166,10 +172,11 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Work Place'),
+        title: Text(loc.workplaceTitle),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -178,7 +185,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             if (context.canPop()) {
               context.pop();
             } else {
-              context.go(widget.isClient ? '/client-cases' : '/lawyer-cases');
+              context.go(widget.isClient ? '/client-home' : '/lawyer-dashboard');
             }
           },
         ),
@@ -194,22 +201,30 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           // Partner Header Card
           _buildPartnerHeader(),
 
-          // Tabs
+          // Scrollable Tabs
           Container(
             color: Colors.white,
-            child: TabBar(
-              controller: _tabController,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
-              tabs: const [
-                Tab(text: 'Overview'),
-                Tab(text: 'Consultations'),
-                Tab(text: 'Files'),
-                Tab(text: 'Events'),
-                Tab(text: 'Milestones'),
-                Tab(text: 'Invoices'),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: TabBar(
+                controller: _tabController,
+                labelColor: AppColors.primary,
+                unselectedLabelColor: AppColors.textSecondary,
+                indicator: UnderlineTabIndicator(
+                  borderSide: BorderSide(color: AppColors.primary, width: 2),
+                ),
+                tabAlignment: TabAlignment.start,
+                isScrollable: true,
+                labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                tabs: [
+                  Tab(text: loc.overview),
+                  Tab(text: loc.consultations),
+                  Tab(text: loc.files),
+                  Tab(text: loc.events),
+                  Tab(text: loc.milestones),
+                  Tab(text: loc.invoices),
+                ],
+              ),
             ),
           ),
 
@@ -222,12 +237,11 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                   .snapshots()
                   .map((doc) {
                     if (!doc.exists) {
-                      return widget.caseModel; // Keep showing initial data if document is deleted
+                      return widget.caseModel;
                     }
                     try {
                       return CaseModel.fromMap(doc.data()!, doc.id);
                     } catch (e) {
-                      // If there's a parsing error, use initial data
                       return widget.caseModel;
                     }
                   }),
@@ -237,7 +251,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(AppSpacing.md),
-                      child: Text('Error: ${snapshot.error}'),
+                      child: Text('${loc.error}: ${snapshot.error}'),
                     ),
                   );
                 }
@@ -263,6 +277,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildPartnerHeader() {
+    final loc = AppLocalizations.of(context);
     if (_isLoadingData) {
       return const Padding(
         padding: EdgeInsets.all(AppSpacing.md),
@@ -271,49 +286,42 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     }
 
     if (_partnerData == null) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.all(AppSpacing.md),
-        child: Text('Partner details not found'),
+        child: Text(loc.partnerDetailsNotFound),
       );
     }
 
     final partnerId = widget.isClient ? widget.caseModel.acceptedLawyerId : widget.caseModel.clientId;
-    final name = _partnerData!['fullName'] ?? 'Unknown';
-    final role = widget.isClient ? 'Lawyer' : 'Client';
+    final name = _partnerData!['fullName'] ?? loc.unknown;
+    final role = widget.isClient ? loc.lawyer : loc.client;
     
-    // Additional details based on role
     String extraInfo = '';
     if (widget.isClient) {
-      // We are looking at a lawyer
       final rating = _lawyerProfile?.rating?.toStringAsFixed(1) ?? _partnerData!['rating']?.toString() ?? '0.0';
       final reviews = _lawyerProfile?.reviewsCount.toString() ?? _partnerData!['reviewsCount']?.toString() ?? '0';
-      final experience = _lawyerProfile?.experienceYears.toString() ?? _partnerData!['experienceYears']?.toString() ?? '0';
-      extraInfo = '⭐ $rating ($reviews reviews) • $experience yrs exp';
+      extraInfo = '⭐ $rating ($reviews)';
     } else {
-      // We are looking at a client
-      // Try to parse createdAt to show joined date
       if (_partnerData!['createdAt'] != null) {
         try {
           final DateTime joined = (_partnerData!['createdAt'] as Timestamp).toDate();
-          final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          extraInfo = 'Joined ${months[joined.month - 1]} ${joined.year}';
+          extraInfo = loc.joined('${joined.month}/${joined.year}');
         } catch (e) {
-          extraInfo = 'Client';
+          extraInfo = loc.client;
         }
       } else {
-        extraInfo = 'Client';
+        extraInfo = loc.client;
       }
     }
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       color: Colors.white,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           UserAvatar(
             uid: partnerId ?? '',
-            radius: 30,
+            radius: 24,
             fallbackName: name,
           ),
           const SizedBox(width: AppSpacing.md),
@@ -323,89 +331,86 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
               children: [
                 Text(
                   name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  role,
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  extraInfo,
+                  '$role • $extraInfo',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: AppColors.textSecondary,
-                    fontSize: 12,
+                    fontSize: 11,
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: AppSpacing.sm),
           // Actions
-          Row(
-            children: [
-              if (widget.caseModel.status != 'closed')
-                IconButton(
-                  onPressed: () {
-                    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-                    final partnerId = widget.isClient
-                        ? widget.caseModel.acceptedLawyerId
-                        : widget.caseModel.clientId;
-                    
-                    if (currentUserId != null && partnerId != null && partnerId.isNotEmpty) {
-                      final partnerName = _partnerData?['fullName'] ?? 'User';
-                      final partnerAvatar = _partnerData?['photoUrl'];
-                      
-                      context.push(
-                        '/chat/direct/$partnerId',
-                        extra: {
-                          'clientId': widget.isClient ? currentUserId : partnerId,
-                          'lawyerId': widget.isClient ? partnerId : currentUserId,
-                          'clientName': widget.isClient
-                              ? (_currentUserData != null ? _currentUserData!['fullName'] ?? 'Client' : 'Client')
-                              : partnerName,
-                          'lawyerName': widget.isClient
-                              ? partnerName
-                              : (_currentUserData != null ? _currentUserData!['fullName'] ?? 'Lawyer' : 'Lawyer'),
-                          'clientAvatar': widget.isClient
-                              ? (_currentUserData != null ? _currentUserData!['photoUrl'] : null)
-                              : partnerAvatar,
-                          'lawyerAvatar': widget.isClient
-                              ? partnerAvatar
-                              : (_currentUserData != null ? _currentUserData!['photoUrl'] : null),
-                        },
-                      );
-                    }
-                  },
-                  icon: const PhosphorIcon(PhosphorIconsRegular.chatCircleText,
-                      color: AppColors.primary),
-                ),
-              if (widget.isClient) // Only client might want to view lawyer profile details
-                IconButton(
-                  onPressed: () {
-                    final partnerId = widget.caseModel.acceptedLawyerId;
-                    if (partnerId != null && partnerId.isNotEmpty) {
-                      context.push('/lawyer-profile/$partnerId');
-                    }
-                  },
-                  icon: const PhosphorIcon(PhosphorIconsRegular.userCircle,
-                      color: AppColors.textSecondary),
-                ),
-            ],
-          ),
+          if (widget.caseModel.status != 'closed')
+            IconButton(
+              onPressed: () {
+                final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                final partnerId = widget.isClient
+                    ? widget.caseModel.acceptedLawyerId
+                    : widget.caseModel.clientId;
+                
+                if (currentUserId != null && partnerId != null && partnerId.isNotEmpty) {
+                  final partnerName = _partnerData?['fullName'] ?? 'User';
+                  final partnerAvatar = _partnerData?['photoUrl'];
+                  
+                  context.push(
+                    '/chat/direct/$partnerId',
+                    extra: {
+                      'clientId': widget.isClient ? currentUserId : partnerId,
+                      'lawyerId': widget.isClient ? partnerId : currentUserId,
+                      'clientName': widget.isClient
+                          ? (_currentUserData != null ? _currentUserData!['fullName'] ?? 'Client' : 'Client')
+                          : partnerName,
+                      'lawyerName': widget.isClient
+                          ? partnerName
+                          : (_currentUserData != null ? _currentUserData!['fullName'] ?? 'Lawyer' : 'Lawyer'),
+                      'clientAvatar': widget.isClient
+                          ? (_currentUserData != null ? _currentUserData!['photoUrl'] : null)
+                          : partnerAvatar,
+                      'lawyerAvatar': widget.isClient
+                          ? partnerAvatar
+                          : (_currentUserData != null ? _currentUserData!['photoUrl'] : null),
+                    },
+                  );
+                }
+              },
+              icon: const PhosphorIcon(PhosphorIconsRegular.chatCircleText, color: AppColors.primary),
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+              padding: EdgeInsets.zero,
+              iconSize: 20,
+            ),
+          if (widget.isClient)
+            IconButton(
+              onPressed: () {
+                final partnerId = widget.caseModel.acceptedLawyerId;
+                if (partnerId != null && partnerId.isNotEmpty) {
+                  context.push('/lawyer-profile/$partnerId');
+                }
+              },
+              icon: const PhosphorIcon(PhosphorIconsRegular.info, color: AppColors.textSecondary),
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+              padding: EdgeInsets.zero,
+              iconSize: 20,
+            ),
         ],
       ),
     );
   }
 
   Widget _buildOverviewTab(CaseModel currentCase) {
+    final loc = AppLocalizations.of(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
@@ -415,9 +420,32 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           _buildCompletionFlowUI(currentCase),
           const SizedBox(height: AppSpacing.md),
 
+          if ((currentCase.heldAmount ?? 0) > 0 || currentCase.paymentStatus == 'held')
+            _buildInfoCard(
+              loc.fundsInCustody,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildDetailRow(
+                    PhosphorIconsRegular.lockSimple,
+                    loc.status,
+                    loc.heldInSystemCustody,
+                  ),
+                  const Divider(height: 24),
+                  _buildDetailRow(
+                    PhosphorIconsRegular.wallet,
+                    loc.heldAmount,
+                    '${loc.currencyPKR} ${(currentCase.heldAmount ?? 0).toInt()}',
+                  ),
+                ],
+              ),
+            ),
+          if ((currentCase.heldAmount ?? 0) > 0 || currentCase.paymentStatus == 'held')
+            const SizedBox(height: AppSpacing.md),
+
           // Case Summary Card
           _buildInfoCard(
-            'Case Summary',
+            loc.caseSummary,
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -453,7 +481,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'ID: ${currentCase.caseId.toUpperCase()}',
+                  '${loc.idLabel} ${currentCase.caseId.toUpperCase()}',
                   style: const TextStyle(
                     color: AppColors.textLight,
                     fontSize: 12,
@@ -467,7 +495,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
           // Description Card
           _buildInfoCard(
-            'Description',
+            loc.description,
             Text(
               currentCase.description,
               style: const TextStyle(height: 1.5),
@@ -477,29 +505,29 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
           // Project Details Card
           _buildInfoCard(
-            'Project Details',
+            loc.projectDetails,
             Column(
               children: [
                 _buildDetailRow(
                   PhosphorIconsRegular.mapPin,
-                  'Location',
+                  loc.location,
                   currentCase.city,
                 ),
                 const Divider(height: 24),
                 _buildDetailRow(
                   PhosphorIconsRegular.currencyDollar,
-                  'Budget',
+                  loc.budget,
                   currentCase.agreedBudget != null
-                      ? 'PKR ${currentCase.agreedBudget!.toInt()} (Agreed with Lawyer)'
-                      : 'PKR ${currentCase.budgetMin.toInt()} - ${currentCase.budgetMax.toInt()} (Client Range)',
+                      ? '${loc.currencyPKR} ${currentCase.agreedBudget!.toInt()} (${loc.agreedWithLawyer})'
+                      : '${loc.currencyPKR} ${currentCase.budgetMin.toInt()} - ${currentCase.budgetMax.toInt()} (${loc.clientRange})',
                 ),
                 const Divider(height: 24),
                 _buildDetailRow(
                   PhosphorIconsRegular.usersThree,
-                  'Meeting Preference',
+                  loc.meetingPreference,
                   currentCase.meetingPreference == 'in_person'
-                      ? 'In-Person Meeting'
-                      : 'Virtual / Online',
+                      ? loc.inPersonMeeting
+                      : loc.virtualOnline,
                 ),
               ],
             ),
@@ -508,12 +536,12 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
           // Timeline & Status Card
           _buildInfoCard(
-            'Timeline & Status',
+            loc.timelineAndStatus,
             Column(
               children: [
                 _buildDetailRow(
                   PhosphorIconsRegular.calendarCheck,
-                  'Created On',
+                  loc.createdOn,
                   '${currentCase.createdAt.day}/${currentCase.createdAt.month}/${currentCase.createdAt.year}',
                 ),
                 const Divider(height: 24),
@@ -528,6 +556,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildCompletionFlowUI(CaseModel currentCase) {
+    final loc = AppLocalizations.of(context);
     if (currentCase.status == 'closed') {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -536,12 +565,12 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: AppColors.success),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            PhosphorIcon(PhosphorIconsFill.checkCircle, color: AppColors.success),
-            SizedBox(width: 8),
+            const PhosphorIcon(PhosphorIconsFill.checkCircle, color: AppColors.success),
+            const SizedBox(width: 8),
             Text(
-              'Case Completed Successfully',
+              loc.caseCompletedSuccessfully,
               style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.success),
             ),
           ],
@@ -560,9 +589,9 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       if (currentCase.workCompletionStatus == null || currentCase.workCompletionStatus == 'client_rejected') {
         return _buildLawyerSignalButton(currentCase);
       } else if (currentCase.workCompletionStatus == 'lawyer_signalled') {
-        return _buildSimpleStatusCard('Waiting for Client to verify work...', AppColors.warning);
+        return _buildSimpleStatusCard(loc.waitingForClientToVerifyWork, AppColors.warning);
       } else if (currentCase.workCompletionStatus == 'client_accepted') {
-        return _buildSimpleStatusCard('Work approved! Waiting for payment release...', AppColors.success);
+        return _buildSimpleStatusCard(loc.workApprovedWaitingForPaymentRelease, AppColors.success);
       }
     }
 
@@ -570,6 +599,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildLawyerSignalButton(CaseModel currentCase) {
+    final loc = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -579,8 +609,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       ),
       child: Column(
         children: [
-          const Text(
-            'Have you finished the work? Send a signal to the client to verify and release payment.',
+          Text(
+            loc.finishWorkSignalClient,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
           ),
@@ -588,7 +618,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           FilledButton.icon(
             onPressed: () => _showSignalWorkDoneDialog(currentCase),
             icon: const PhosphorIcon(PhosphorIconsRegular.checkSquare),
-            label: const Text('Signal Work Done'),
+            label: Text(loc.signalWorkDone),
             style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 45)),
           ),
         ],
@@ -597,6 +627,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildClientVerificationCard(CaseModel currentCase) {
+    final loc = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -606,8 +637,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       ),
       child: Column(
         children: [
-          const Text(
-            'Lawyer has marked the work as done. Please verify if you are satisfied.',
+          Text(
+            loc.lawyerMarkedWorkDoneVerify,
             textAlign: TextAlign.center,
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           ),
@@ -621,7 +652,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                     foregroundColor: AppColors.error,
                     side: const BorderSide(color: AppColors.error),
                   ),
-                  child: const Text('Still Pending'),
+                  child: Text(loc.stillPending),
                 ),
               ),
               const SizedBox(width: 12),
@@ -629,7 +660,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                 child: FilledButton(
                   onPressed: () => _verifyWork(currentCase, true),
                   style: FilledButton.styleFrom(backgroundColor: AppColors.success),
-                  child: const Text('Work Approved'),
+                  child: Text(loc.workApproved),
                 ),
               ),
             ],
@@ -640,6 +671,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildClientFinalStepsCard(CaseModel currentCase) {
+    final loc = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -649,8 +681,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       ),
       child: Column(
         children: [
-          const Text(
-             'Work approved! Please rate the lawyer and release the payment to close the case.',
+           Text(
+             loc.workApprovedRateAndRelease,
             textAlign: TextAlign.center,
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           ),
@@ -658,7 +690,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           FilledButton.icon(
             onPressed: () => _showRatingDialog(currentCase),
             icon: const PhosphorIcon(PhosphorIconsRegular.star),
-            label: const Text('Rate & Release Payment'),
+            label: Text(loc.rateAndReleasePayment),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
               minimumSize: const Size(double.infinity, 45),
@@ -687,14 +719,15 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Future<void> _showSignalWorkDoneDialog(CaseModel currentCase) async {
+    final loc = AppLocalizations.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Signal Completion?'),
-        content: const Text('Answering "Yes" will notify the client that the work is finished and ask them to verify it.'),
+        title: Text(loc.signalCompletionTitle),
+        content: Text(loc.signalCompletionMessage),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Signal Work Done')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(loc.cancel)),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(loc.signalWorkDone)),
         ],
       ),
     );
@@ -703,28 +736,29 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       try {
         await CaseService().signalWorkDone(currentCase.caseId);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Completion signal sent to client')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(loc.completionSignalSentToClient)));
         }
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${loc.error}: $e')));
       }
     }
   }
 
   Future<void> _verifyWork(CaseModel currentCase, bool isAccepted) async {
+    final loc = AppLocalizations.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(isAccepted ? 'Approve Work?' : 'Reject Completion?'),
+        title: Text(isAccepted ? loc.approveWorkTitle : loc.rejectCompletionTitle),
         content: Text(isAccepted 
-          ? 'Are you sure you want to approve this work? You will be asked to rate and pay next.' 
-          : 'Are you sure the work is not done? This will signal the lawyer to continue working.'),
+          ? loc.approveWorkMessage 
+          : loc.rejectCompletionMessage),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(loc.cancel)),
           FilledButton(
             onPressed: () => Navigator.pop(context, true), 
             style: isAccepted ? null : FilledButton.styleFrom(backgroundColor: AppColors.error),
-            child: Text(isAccepted ? 'Yes, Approve' : 'Yes, Work is Pending'),
+            child: Text(isAccepted ? loc.yesApprove : loc.yesWorkPending),
           ),
         ],
       ),
@@ -735,17 +769,18 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         await CaseService().verifyWork(currentCase.caseId, isAccepted);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(isAccepted ? 'Work approved!' : 'Rejection sent to lawyer'),
+            content: Text(isAccepted ? loc.workApproved : loc.rejectionSentToLawyer),
             backgroundColor: isAccepted ? AppColors.success : AppColors.error,
           ));
         }
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${loc.error}: $e')));
       }
     }
   }
 
   Future<void> _showRatingDialog(CaseModel currentCase) async {
+    final loc = AppLocalizations.of(context);
     final Map<String, double> ratings = {
       'Quality of Work': 5.0,
       'Budget Adjustment': 5.0,
@@ -759,7 +794,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Rate Lawyer'),
+          title: Text(loc.rateLawyerTitle),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -767,7 +802,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                 ...ratings.keys.map((key) => Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(key, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text(_ratingLabel(key), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     Row(
                       children: List.generate(5, (index) => GestureDetector(
                         onTap: () => setDialogState(() => ratings[key] = (index + 1).toDouble()),
@@ -787,8 +822,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                 TextField(
                   controller: descriptionController,
                   maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Write a review...',
+                  decoration: InputDecoration(
+                    labelText: loc.writeReviewHint,
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -796,10 +831,10 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(loc.cancel)),
             FilledButton(
               onPressed: () => Navigator.pop(context, true), 
-              child: const Text('Submit Review & Continue'),
+              child: Text(loc.submitReviewAndContinue),
             ),
           ],
         ),
@@ -819,21 +854,22 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           _showPaymentReleaseDialog(currentCase);
         }
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to submit review: $e')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${loc.failedToSubmitReview}: $e')));
       }
     }
   }
 
   Future<void> _showPaymentReleaseDialog(CaseModel currentCase) async {
+    final loc = AppLocalizations.of(context);
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Release Payment'),
+        title: Text(loc.releasePaymentTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('The work is approved and reviewed. Now release the agreed payment to the lawyer.'),
+            Text(loc.releasePaymentDescription),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
@@ -844,7 +880,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Agreed Amount:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text(loc.agreedAmountLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
                   Text(
                     'PKR ${currentCase.agreedBudget?.toInt() ?? 0}',
                     style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 18),
@@ -855,10 +891,10 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(loc.cancel)),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Release Payment'),
+            child: Text(loc.releasePaymentAction),
           ),
         ],
       ),
@@ -868,14 +904,14 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       try {
         await CaseService().completeCase(currentCase.caseId);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Payment released! Case marked as completed.'),
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(loc.paymentReleasedAndCaseCompleted),
             backgroundColor: AppColors.success,
           ));
           // Case will automatically update in StreamBuilder and show completion state
         }
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment failed: $e')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${loc.paymentFailed}: $e')));
       }
     }
   }
@@ -917,18 +953,77 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     );
   }
 
+  String _consultationStatusLabel(String status) {
+    final loc = AppLocalizations.of(context);
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return loc.pendingStatus;
+      case 'accepted':
+        return loc.accept;
+      case 'rejected':
+        return loc.reject;
+      default:
+        return status.toUpperCase();
+    }
+  }
+
+  String _eventStatusLabel(String status) {
+    final loc = AppLocalizations.of(context);
+    switch (status.toLowerCase()) {
+      case 'upcoming':
+        return loc.upcoming;
+      case 'completed':
+        return loc.completed;
+      case 'cancelled':
+        return loc.cancelled;
+      default:
+        return status.toUpperCase();
+    }
+  }
+
+  String _invoiceStatusLabel(String status) {
+    final loc = AppLocalizations.of(context);
+    switch (status.toLowerCase()) {
+      case 'paid':
+        return loc.paid;
+      case 'held':
+        return loc.held;
+      default:
+        return loc.pendingStatus;
+    }
+  }
+
+  String _ratingLabel(String key) {
+    final loc = AppLocalizations.of(context);
+    switch (key) {
+      case 'Quality of Work':
+        return loc.qualityOfWork;
+      case 'Budget Adjustment':
+        return loc.budgetAdjustment;
+      case 'Way of Talking':
+        return loc.wayOfTalking;
+      case 'Promptness':
+        return loc.promptness;
+      case 'Expertise':
+        return loc.expertise;
+      default:
+        return key;
+    }
+  }
+
   Widget _buildStatusRow(CaseModel currentCase) {
+    final loc = AppLocalizations.of(context);
     Color statusColor;
     String statusText;
 
     switch (currentCase.status.toLowerCase()) {
       case 'active':
         statusColor = AppColors.success;
-        statusText = 'Currently Active (Workspace)';
+        statusText = loc.currentlyActiveWorkspace;
         break;
       case 'closed':
         statusColor = AppColors.error;
-        statusText = 'Case Closed / Completed';
+        statusText = loc.caseClosedCompleted;
         break;
       default:
         statusColor = AppColors.warning;
@@ -950,8 +1045,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Current Status',
+              Text(
+                loc.currentStatus,
                 style: TextStyle(
                   color: AppColors.textLight,
                   fontSize: 12,
@@ -973,6 +1068,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildConsultationsTab() {
+    final loc = AppLocalizations.of(context);
     final consultationService = ConsultationService();
 
     return Column(
@@ -983,7 +1079,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             child: FilledButton.icon(
               onPressed: _showRequestConsultationSheet,
               icon: const PhosphorIcon(PhosphorIconsRegular.videoCamera),
-              label: const Text('Request Consultation'),
+              label: Text(loc.requestConsultation),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 48),
               ),
@@ -995,7 +1091,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                 .getConsultationsForCase(widget.caseModel.caseId),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
+                return Center(child: Text('${loc.error}: ${snapshot.error}'));
               }
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -1003,11 +1099,11 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
               final consultations = snapshot.data ?? [];
               if (consultations.isEmpty) {
-                return const Center(
+                return Center(
                   child: Text(
-                    'No consultations scheduled yet.\nRequest one above!',
+                    loc.noConsultationsScheduledYet,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: const TextStyle(color: AppColors.textSecondary),
                   ),
                 );
               }
@@ -1028,12 +1124,10 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildConsultationCard(ConsultationModel consult) {
-    // Determine if we are the requester or target
+    final loc = AppLocalizations.of(context);
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    // Note: This logic assumes we can get current user. passing in is better but this works.
     final isRequester = consult.requesterId == currentUserId;
 
-    // Status color
     Color statusColor;
     switch (consult.status) {
       case 'accepted':
@@ -1050,98 +1144,113 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       onTap: () {
         context.push('/consultation-details/${widget.caseModel.caseId}/${consult.id}');
       },
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          side: const BorderSide(color: AppColors.grey200),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    consult.type == 'video'
-                        ? PhosphorIconsRegular.videoCamera
-                        : PhosphorIconsRegular.usersThree,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: AppColors.grey100)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: PhosphorIcon(
+                        consult.type == 'video'
+                            ? PhosphorIconsRegular.videoCamera
+                            : PhosphorIconsRegular.usersThree,
+                        color: AppColors.primary,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  consult.type == 'video' ? loc.videoCall : loc.inPerson,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(
+                                  _consultationStatusLabel(consult.status),
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${consult.scheduledAt.day}/${consult.scheduledAt.month}/${consult.scheduledAt.year} @ ${consult.scheduledAt.hour}:${consult.scheduledAt.minute.toString().padLeft(2, '0')}',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (consult.status == 'pending' && !isRequester)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Text(
-                          consult.type == 'video' ? 'Video Call' : 'In-Person',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        OutlinedButton(
+                          onPressed: () => _updateConsultationStatus(consult.id, 'rejected'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.error,
+                            side: const BorderSide(color: AppColors.error),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          child: Text(loc.reject),
                         ),
-                        Text(
-                          '${consult.scheduledAt.day}/${consult.scheduledAt.month}/${consult.scheduledAt.year} @ ${consult.scheduledAt.hour}:${consult.scheduledAt.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Partner: ${widget.isClient ? consult.lawyerName : consult.clientName}',
-                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w500),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: () => _updateConsultationStatus(consult.id, 'accepted'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.success,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          child: Text(loc.accept),
                         ),
                       ],
                     ),
                   ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      consult.status.toUpperCase(),
-                      style: TextStyle(
-                        color: statusColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-  
-              // Action Buttons (Accept/Reject) - Only for Target if Pending
-              if (consult.status == 'pending' && !isRequester) ...[
-                const Divider(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () =>
-                          _updateConsultationStatus(consult.id, 'rejected'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.error,
-                        side: const BorderSide(color: AppColors.error),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: const Text('Reject'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: () =>
-                          _updateConsultationStatus(consult.id, 'accepted'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.success,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: const Text('Accept'),
-                    ),
-                  ],
-                ),
-              ]
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1195,6 +1304,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildFilesTab() {
+    final loc = AppLocalizations.of(context);
     return Column(
       children: [
         if (widget.caseModel.status != 'closed')
@@ -1209,7 +1319,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
                   : const PhosphorIcon(PhosphorIconsRegular.uploadSimple),
-              label: Text(_isUploadingFile ? 'Uploading...' : 'Upload File'),
+              label: Text(_isUploadingFile ? loc.uploading : loc.uploadFile),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 48),
               ),
@@ -1220,7 +1330,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             stream: FileService().streamFilesForCase(widget.caseModel.caseId),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
+                return Center(child: Text('${loc.error}: ${snapshot.error}'));
               }
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -1228,25 +1338,24 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
               final dbFiles = snapshot.data ?? [];
               
-              // Map initial attachments from CaseModel to FileModel-like objects
               final initialFiles = widget.caseModel.attachments.map((att) => FileModel(
                 id: 'initial_${att.fileUrl.hashCode}',
                 caseId: widget.caseModel.caseId,
                 uploaderId: widget.caseModel.clientId,
-                fileName: att.title.isEmpty ? 'Original Attachment' : att.title,
+                fileName: att.title.isEmpty ? loc.originalAttachment : att.title,
                 fileUrl: att.fileUrl,
-                fileSize: 0, // Not available for original attachments
+                fileSize: 0,
                 uploadedAt: widget.caseModel.createdAt,
               )).toList();
 
               final allFiles = [...initialFiles, ...dbFiles];
 
               if (allFiles.isEmpty) {
-                return const Center(
+                return Center(
                   child: Text(
-                    'No files shared yet.\nUpload documents here!',
+                    loc.noFilesSharedYet,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: const TextStyle(color: AppColors.textSecondary),
                   ),
                 );
               }
@@ -1259,73 +1368,87 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                   final isInitial = file.id.startsWith('initial_');
                   final isMe = !isInitial && file.uploaderId == FirebaseAuth.instance.currentUser?.uid;
                   
-                  // Label Logic
                   String uploaderLabel = '';
                   if (isInitial) {
-                    uploaderLabel = 'Uploaded by Client (Initial)';
+                    uploaderLabel = loc.uploadedByClientInitial;
                   } else if (file.uploaderId == widget.caseModel.clientId) {
-                    uploaderLabel = 'Uploaded by Client';
+                    uploaderLabel = loc.uploadedByClient;
                   } else if (file.uploaderId == widget.caseModel.acceptedLawyerId) {
-                    uploaderLabel = 'Uploaded by Lawyer';
+                    uploaderLabel = loc.uploadedByLawyer;
                   }
 
-                  return Card(
-                    elevation: 0,
-                    margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    shape: RoundedRectangleBorder(
-                      side: const BorderSide(color: AppColors.grey200),
-                      borderRadius: BorderRadius.circular(AppRadius.md),
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(bottom: BorderSide(color: AppColors.grey100)),
                     ),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: isInitial ? AppColors.primary.withValues(alpha: 0.1) : AppColors.grey100,
-                        child: PhosphorIcon(
-                          isInitial ? PhosphorIconsFill.shieldStar : PhosphorIconsRegular.file, 
-                          color: AppColors.primary,
-                          size: 20,
-                        ),
-                      ),
-                      title: Text(
-                        file.fileName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            uploaderLabel,
-                            style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
-                          ),
-                          Text(
-                            isInitial 
-                              ? 'Original Attachment • ${file.uploadedAt.day}/${file.uploadedAt.month}/${file.uploadedAt.year}'
-                              : '${(file.fileSize / 1024).toStringAsFixed(1)} KB • ${file.uploadedAt.day}/${file.uploadedAt.month}/${file.uploadedAt.year}',
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                        ],
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (isMe) ...[
-                            IconButton(
-                              icon: const PhosphorIcon(PhosphorIconsRegular.pencilSimple, color: AppColors.textLight, size: 20),
-                              onPressed: () => _renameFile(file),
-                            ),
-                            IconButton(
-                              icon: const PhosphorIcon(PhosphorIconsRegular.trash, color: AppColors.error, size: 20),
-                              onPressed: () => _deleteFile(file),
-                            ),
-                          ],
-                          IconButton(
-                            icon: const PhosphorIcon(PhosphorIconsRegular.downloadSimple, color: AppColors.primary, size: 20),
-                            onPressed: () => _openFile(file.fileUrl),
-                          ),
-                        ],
-                      ),
+                    child: InkWell(
                       onTap: () => _openFile(file.fileUrl),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: isInitial ? AppColors.primary.withValues(alpha: 0.1) : AppColors.grey100,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: PhosphorIcon(
+                              isInitial ? PhosphorIconsFill.shieldStar : PhosphorIconsRegular.file, 
+                              color: AppColors.primary,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  file.fileName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  isInitial 
+                                    ? '${loc.originalAttachment} • ${file.uploadedAt.day}/${file.uploadedAt.month}/${file.uploadedAt.year}'
+                                    : '${(file.fileSize / 1024).toStringAsFixed(1)} KB • $uploaderLabel',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'download') {
+                                _openFile(file.fileUrl);
+                              } else if (value == 'rename' && isMe) {
+                                _renameFile(file);
+                              } else if (value == 'delete' && isMe) {
+                                _deleteFile(file);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem(value: 'download', child: const Text('Download')),
+                              if (isMe) PopupMenuItem(value: 'rename', child: const Text('Rename')),
+                              if (isMe) PopupMenuItem(value: 'delete', child: const Text('Delete')),
+                            ],
+                            child: const PhosphorIcon(PhosphorIconsRegular.dotsThreeVertical, size: 18),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -1338,6 +1461,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildEventsTab() {
+    final loc = AppLocalizations.of(context);
     return Column(
       children: [
         if (!widget.isClient && widget.caseModel.status != 'closed')
@@ -1346,14 +1470,14 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             child: FilledButton.icon(
               onPressed: _showAddEventDialog,
               icon: const PhosphorIcon(PhosphorIconsRegular.plusCircle),
-              label: const Text('Add Event'),
+              label: Text(loc.addEvent),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 48),
               ),
             ),
           ),
         if (widget.isClient)
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(
               AppSpacing.md,
               AppSpacing.sm,
@@ -1363,7 +1487,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Only lawyer can add events. You can view all updates here.',
+                loc.onlyLawyerCanAddEvents,
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12,
@@ -1376,7 +1500,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             stream: _eventService.streamCaseEvents(widget.caseModel.caseId),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
+                return Center(child: Text('${loc.error}: ${snapshot.error}'));
               }
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -1384,11 +1508,11 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
               final events = snapshot.data ?? [];
               if (events.isEmpty) {
-                return const Center(
+                return Center(
                   child: Text(
-                    'No case events yet.\nLawyer can add updates here.',
+                    loc.noCaseEventsYet,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: const TextStyle(color: AppColors.textSecondary),
                   ),
                 );
               }
@@ -1402,66 +1526,73 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                       '${event.scheduledAt.day}/${event.scheduledAt.month}/${event.scheduledAt.year} '
                       '${event.scheduledAt.hour.toString().padLeft(2, '0')}:${event.scheduledAt.minute.toString().padLeft(2, '0')}';
 
-                  return Card(
-                    elevation: 0,
-                    margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    shape: RoundedRectangleBorder(
-                      side: const BorderSide(color: AppColors.grey200),
-                      borderRadius: BorderRadius.circular(AppRadius.md),
+                  return Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(bottom: BorderSide(color: AppColors.grey100)),
                     ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(AppSpacing.md),
-                      leading: CircleAvatar(
-                        backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                        child: const PhosphorIcon(
-                          PhosphorIconsRegular.calendarDots,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      title: Text(
-                        event.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              event.location?.isNotEmpty == true
-                                  ? 'Place: ${event.location}'
-                                  : event.subtitle,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Time: $eventTime',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.info.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          event.status.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.info,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const PhosphorIcon(
+                            PhosphorIconsRegular.calendarDots,
+                            color: AppColors.primary,
+                            size: 18,
                           ),
                         ),
-                      ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                event.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                event.location?.isNotEmpty == true
+                                    ? '${event.location} • $eventTime'
+                                    : eventTime,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.info.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            _eventStatusLabel(event.status),
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.info,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -1474,6 +1605,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildMilestonesTab() {
+    final loc = AppLocalizations.of(context);
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     final canEdit = widget.caseModel.status != 'closed';
 
@@ -1485,7 +1617,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             child: FilledButton.icon(
               onPressed: _showAddMilestoneDialog,
               icon: const PhosphorIcon(PhosphorIconsRegular.plusCircle),
-              label: const Text('Add Milestone / Task'),
+              label: Text(loc.addMilestoneTask),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 48),
               ),
@@ -1496,7 +1628,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             stream: _milestoneService.streamCaseMilestones(widget.caseModel.caseId),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
+                return Center(child: Text('${loc.error}: ${snapshot.error}'));
               }
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -1504,11 +1636,11 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
               final milestones = snapshot.data ?? [];
               if (milestones.isEmpty) {
-                return const Center(
+                return Center(
                   child: Text(
-                    'No milestones yet.\nAdd tasks to keep progress clear.',
+                    loc.noMilestonesYet,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: const TextStyle(color: AppColors.textSecondary),
                   ),
                 );
               }
@@ -1522,128 +1654,211 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                   final isCompleted = milestone.status == 'completed' || isPaidMilestone;
                   final hasPayment = milestone.paymentAmount > 0;
                   final dueText = milestone.dueDate != null
-                      ? 'Due ${milestone.dueDate!.day}/${milestone.dueDate!.month}/${milestone.dueDate!.year}'
-                      : 'No due date';
+                      ? '${loc.due} ${milestone.dueDate!.day}/${milestone.dueDate!.month}/${milestone.dueDate!.year}'
+                      : loc.noDueDate;
                   final canToggle = canEdit && currentUserId != null && !isPaidMilestone;
 
-                  return Card(
-                    elevation: 0,
-                    margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    shape: RoundedRectangleBorder(
-                      side: const BorderSide(color: AppColors.grey200),
-                      borderRadius: BorderRadius.circular(AppRadius.md),
+                  return Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(bottom: BorderSide(color: AppColors.grey100)),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: isCompleted
-                                    ? AppColors.success.withValues(alpha: 0.12)
-                                    : AppColors.primary.withValues(alpha: 0.1),
-                                child: PhosphorIcon(
-                                  isCompleted
-                                      ? PhosphorIconsFill.checkCircle
-                                      : PhosphorIconsRegular.circle,
-                                  color: isCompleted ? AppColors.success : AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      milestone.title,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                        decoration:
-                                            isCompleted ? TextDecoration.lineThrough : null,
-                                      ),
-                                    ),
-                                    if (milestone.details.isNotEmpty)
-                                      Text(
-                                        milestone.details,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              if (canToggle)
-                                IconButton(
-                                  onPressed: () => _toggleMilestoneStatus(
-                                    milestone,
-                                    isCompleted ? 'pending' : 'completed',
-                                  ),
-                                  icon: PhosphorIcon(
-                                    isCompleted
-                                        ? PhosphorIconsRegular.arrowCounterClockwise
-                                        : PhosphorIconsRegular.check,
-                                    color: isCompleted
-                                        ? AppColors.warning
-                                        : AppColors.success,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            dueText,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          if (hasPayment) ...[
-                            const SizedBox(height: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
                             Container(
-                              padding: const EdgeInsets.all(AppSpacing.md),
+                              width: 36,
+                              height: 36,
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(AppRadius.md),
+                                color: isCompleted
+                                    ? AppColors.success.withValues(alpha: 0.1)
+                                    : AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              child: PhosphorIcon(
+                                isCompleted
+                                    ? PhosphorIconsFill.checkCircle
+                                    : PhosphorIconsRegular.circle,
+                                color: isCompleted ? AppColors.success : AppColors.primary,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Payment Amount',
-                                        style: TextStyle(
-                                          fontSize: 12,
+                                  Text(
+                                    milestone.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      decoration: isCompleted ? TextDecoration.lineThrough : null,
+                                      color: isCompleted ? AppColors.textSecondary : null,
+                                    ),
+                                  ),
+                                  if (milestone.details.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        milestone.details,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 11,
                                           color: AppColors.textSecondary,
                                         ),
                                       ),
-                                      Text(
-                                        'PKR ${milestone.paymentAmount.toStringAsFixed(0)}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                          color: AppColors.primary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (currentUserId == widget.caseModel.clientId && widget.isClient)
-                                    FilledButton.icon(
-                                      onPressed: isPaidMilestone ? null : () => _payMilestone(milestone),
-                                      icon: const PhosphorIcon(PhosphorIconsRegular.creditCard),
-                                      label: Text(isPaidMilestone ? 'Paid' : 'Pay'),
                                     ),
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      dueText,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: AppColors.textLight,
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
+                            const SizedBox(width: AppSpacing.sm),
+                            if (hasPayment)
+                              Padding(
+                                padding: const EdgeInsets.only(right: AppSpacing.sm),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'PKR ${milestone.paymentAmount.toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                        color: isCompleted ? AppColors.success : AppColors.primary,
+                                      ),
+                                    ),
+                                    Text(
+                                      isPaidMilestone ? loc.paid : (milestone.status == 'held' ? 'Held' : 'Pending'),
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        color: isPaidMilestone ? AppColors.success : AppColors.warning,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (canToggle)
+                              GestureDetector(
+                                onTap: () => _toggleMilestoneStatus(
+                                  milestone,
+                                  isCompleted ? 'pending' : 'completed',
+                                ),
+                                child: PhosphorIcon(
+                                  isCompleted
+                                      ? PhosphorIconsRegular.arrowCounterClockwise
+                                      : PhosphorIconsRegular.check,
+                                  color: isCompleted ? AppColors.warning : AppColors.success,
+                                  size: 20,
+                                ),
+                              ),
                           ],
-                        ],
-                      ),
+                        ),
+                        if (hasPayment && currentUserId == widget.caseModel.clientId && widget.isClient)
+                          Padding(
+                            padding: const EdgeInsets.only(top: AppSpacing.md),
+                            child: Row(
+                              children: [
+                                if (isPaidMilestone)
+                                  FilledButton.icon(
+                                    onPressed: null,
+                                    icon: const PhosphorIcon(PhosphorIconsRegular.creditCard, size: 16),
+                                    label: Text(loc.paid),
+                                    style: FilledButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  )
+                                else if (milestone.status == 'held')
+                                  FilledButton.icon(
+                                    onPressed: _isPayingMilestone ? null : () async {
+                                      setState(() => _isPayingMilestone = true);
+                                      try {
+                                        final opId = 'milestone_release_${milestone.id}_${DateTime.now().millisecondsSinceEpoch}';
+                                        final holdOpId = milestone.holdOperationId;
+                                        final lawyerId = widget.caseModel.acceptedLawyerId;
+                                        if (holdOpId == null || holdOpId.isEmpty) {
+                                          throw Exception('Hold operation not found');
+                                        }
+                                        if (lawyerId == null || lawyerId.isEmpty) {
+                                          throw Exception('Lawyer not assigned to case');
+                                        }
+
+                                        await _walletService.releaseHeldFunds(
+                                          fromUserId: widget.caseModel.clientId,
+                                          toUserId: lawyerId,
+                                          amount: milestone.paymentAmount,
+                                          operationId: opId,
+                                          releaseReason: 'Release milestone payment: ${milestone.title}',
+                                          originalHoldOperationId: holdOpId,
+                                        );
+
+                                        await _milestoneService.markAsReleased(
+                                          caseId: widget.caseModel.caseId,
+                                          milestoneId: milestone.id,
+                                          releaseOperationId: opId,
+                                        );
+
+                                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(loc.paymentReleasedSuccessfully), backgroundColor: AppColors.success));
+                                      } catch (e) {
+                                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${loc.releaseFailed}: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppColors.error));
+                                      } finally {
+                                        if (mounted) setState(() => _isPayingMilestone = false);
+                                      }
+                                    },
+                                    icon: _isPayingMilestone
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const PhosphorIcon(PhosphorIconsRegular.check, size: 16),
+                                    label: Text(_isPayingMilestone ? loc.processing : loc.release),
+                                    style: FilledButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  )
+                                else
+                                  FilledButton.icon(
+                                    onPressed: _isPayingMilestone
+                                        ? null
+                                        : () => _payMilestone(milestone),
+                                    icon: _isPayingMilestone
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const PhosphorIcon(PhosphorIconsRegular.creditCard, size: 16),
+                                    label: Text(_isPayingMilestone ? loc.processing : loc.pay),
+                                    style: FilledButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
                   );
                 },
@@ -1656,6 +1871,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Widget _buildInvoicesTab() {
+    final loc = AppLocalizations.of(context);
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     final canCreateInvoice = !widget.isClient && widget.caseModel.status != 'closed';
 
@@ -1667,7 +1883,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             child: FilledButton.icon(
               onPressed: _showCreateInvoiceDialog,
               icon: const PhosphorIcon(PhosphorIconsRegular.receipt),
-              label: const Text('Create Invoice'),
+              label: Text(loc.createInvoice),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 48),
               ),
@@ -1678,7 +1894,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             stream: _invoiceService.streamCaseInvoices(widget.caseModel.caseId),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
+                return Center(child: Text('${loc.error}: ${snapshot.error}'));
               }
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -1686,9 +1902,9 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
               final invoices = snapshot.data ?? [];
               if (invoices.isEmpty) {
-                return const Center(
+                return Center(
                   child: Text(
-                    'No invoices yet.\nLawyer can create payment requests here.',
+                    loc.noInvoicesYet,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
@@ -1701,103 +1917,129 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                 itemBuilder: (context, index) {
                   final invoice = invoices[index];
                   final isPaid = invoice.status == 'paid';
+                  final isHeld = invoice.status == 'held';
                   final canMarkPaid = !isPaid && currentUserId != null &&
                       currentUserId == invoice.payerId;
 
-                  return Card(
-                    elevation: 0,
-                    margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    shape: RoundedRectangleBorder(
-                      side: const BorderSide(color: AppColors.grey200),
-                      borderRadius: BorderRadius.circular(AppRadius.md),
+                  return Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(bottom: BorderSide(color: AppColors.grey100)),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  invoice.title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    invoice.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${invoice.currency} ${invoice.amount.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isPaid
+                                    ? AppColors.success.withValues(alpha: 0.15)
+                                      : isHeld
+                                          ? AppColors.primary.withValues(alpha: 0.15)
+                                          : AppColors.warning.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: Text(
+                                _invoiceStatusLabel(invoice.status),
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
                                   color: isPaid
-                                      ? AppColors.success.withValues(alpha: 0.12)
-                                      : AppColors.warning.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  isPaid ? 'PAID' : 'PENDING',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color:
-                                        isPaid ? AppColors.success : AppColors.warning,
-                                  ),
+                                    ? AppColors.success
+                                    : isHeld
+                                      ? AppColors.primary
+                                      : AppColors.warning,
                                 ),
                               ),
+                            ),
+                          ],
+                        ),
+                        if (invoice.notes.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: AppSpacing.sm),
+                            child: Text(
+                              invoice.notes,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.sm),
+                          child: Row(
+                            children: [
+                              Text(
+                                invoice.dueDate != null
+                                    ? '${loc.due}: ${invoice.dueDate!.day}/${invoice.dueDate!.month}/${invoice.dueDate!.year}'
+                                    : loc.noDueDate,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textLight,
+                                ),
+                              ),
+                              if (invoice.paidAt != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: AppSpacing.md),
+                                  child: Text(
+                                    'Paid: ${invoice.paidAt!.day}/${invoice.paidAt!.month}/${invoice.paidAt!.year}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.success,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${invoice.currency} ${invoice.amount.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
+                        ),
+                        if (canMarkPaid)
+                          Padding(
+                            padding: const EdgeInsets.only(top: AppSpacing.md),
+                            child: FilledButton.icon(
+                              onPressed: () => _payInvoice(invoice),
+                              icon: const PhosphorIcon(PhosphorIconsRegular.creditCard, size: 16),
+                              label: Text(isHeld ? loc.release : loc.pay),
+                              style: FilledButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                              ),
                             ),
                           ),
-                          if (invoice.notes.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              invoice.notes,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          Text(
-                            invoice.dueDate != null
-                                ? 'Due: ${invoice.dueDate!.day}/${invoice.dueDate!.month}/${invoice.dueDate!.year}'
-                                : 'Due: Not set',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          if (invoice.paidAt != null)
-                            Text(
-                              'Paid: ${invoice.paidAt!.day}/${invoice.paidAt!.month}/${invoice.paidAt!.year}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          if (canMarkPaid) ...[
-                            const SizedBox(height: AppSpacing.sm),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: FilledButton.icon(
-                                onPressed: () => _payInvoice(invoice),
-                                icon: const PhosphorIcon(PhosphorIconsRegular.creditCard),
-                                label: const Text('Pay'),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                      ],
                     ),
                   );
                 },
@@ -1810,6 +2052,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Future<void> _showAddMilestoneDialog() async {
+    final loc = AppLocalizations.of(context);
     final titleController = TextEditingController();
     final detailsController = TextEditingController();
     final paymentController = TextEditingController();
@@ -1820,34 +2063,34 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add Milestone / Task'),
+          title: Text(loc.addMilestoneTask),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Title',
-                    hintText: 'e.g., Draft petition and review',
+                  decoration: InputDecoration(
+                    labelText: loc.titleLabel,
+                    hintText: loc.milestoneTitleHint,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 TextField(
                   controller: detailsController,
                   maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Details',
-                    hintText: 'Optional notes for this task',
+                  decoration: InputDecoration(
+                    labelText: loc.detailsLabel,
+                    hintText: loc.optionalTaskNotesHint,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 TextField(
                   controller: paymentController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Payment Amount (PKR)',
-                    hintText: 'Optional - leave empty if no payment required',
+                  decoration: InputDecoration(
+                    labelText: loc.paymentAmountPKRLabel,
+                    hintText: loc.optionalLeaveEmptyIfNoPaymentRequired,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -1868,7 +2111,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                     icon: const Icon(Icons.calendar_today, size: 16),
                     label: Text(
                       dueDate == null
-                          ? 'Set Due Date (Optional)'
+                          ? loc.setDueDateOptional
                           : '${dueDate!.day}/${dueDate!.month}/${dueDate!.year}',
                     ),
                   ),
@@ -1879,7 +2122,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           actions: [
             TextButton(
               onPressed: isSubmitting ? null : () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(loc.cancel),
             ),
             FilledButton(
               onPressed: isSubmitting
@@ -1891,8 +2134,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                       
                       if (title.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Task title is required'),
+                          SnackBar(
+                            content: Text(loc.taskTitleRequired),
                             backgroundColor: AppColors.error,
                           ),
                         );
@@ -1918,7 +2161,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                         color: Colors.white,
                       ),
                     )
-                  : const Text('Add'),
+                  : Text(loc.add),
             ),
           ],
         ),
@@ -1932,6 +2175,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     required DateTime? dueDate,
     required double paymentAmount,
   }) async {
+    final loc = AppLocalizations.of(context);
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     final lawyerId = widget.caseModel.acceptedLawyerId;
     final clientId = widget.caseModel.clientId;
@@ -1950,7 +2194,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     );
 
     final dueText = dueDate != null
-        ? ' (due ${dueDate.day}/${dueDate.month}/${dueDate.year})'
+      ? ' (${loc.due} ${dueDate.day}/${dueDate.month}/${dueDate.year})'
         : '';
     final message = '$title$dueText';
 
@@ -1960,7 +2204,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         userId: clientId,
         actorId: currentUserId,
         type: NotificationType.generic,
-        title: 'New milestone added',
+        title: loc.newMilestoneAdded,
         message: message,
         referenceType: 'case_milestone',
         referenceId: widget.caseModel.caseId,
@@ -1972,7 +2216,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         userId: lawyerId,
         actorId: currentUserId,
         type: NotificationType.generic,
-        title: 'New milestone added',
+        title: loc.newMilestoneAdded,
         message: message,
         referenceType: 'case_milestone',
         referenceId: widget.caseModel.caseId,
@@ -1983,7 +2227,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Milestone added successfully')),
+        SnackBar(content: Text(loc.milestoneAddedSuccessfully)),
       );
     }
   }
@@ -2003,8 +2247,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         SnackBar(
           content: Text(
             status == 'completed'
-                ? 'Milestone marked as completed'
-                : 'Milestone reopened',
+                ? loc.milestoneMarkedCompleted
+                : loc.milestoneReopened,
           ),
         ),
       );
@@ -2012,6 +2256,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Future<void> _showCreateInvoiceDialog() async {
+    final loc = AppLocalizations.of(context);
     final titleController = TextEditingController();
     final notesController = TextEditingController();
     final amountController = TextEditingController();
@@ -2022,34 +2267,34 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Create Invoice'),
+          title: Text(loc.createInvoice),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Invoice Title',
-                    hintText: 'e.g., Filing fee - stage 1',
+                  decoration: InputDecoration(
+                    labelText: loc.invoiceTitleLabel,
+                    hintText: loc.invoiceTitleHint,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 TextField(
                   controller: amountController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Amount (PKR)',
-                    hintText: 'e.g., 15000',
+                  decoration: InputDecoration(
+                    labelText: loc.amountPKRLabel,
+                    hintText: loc.amountHint,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 TextField(
                   controller: notesController,
                   maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Notes',
-                    hintText: 'Optional payment details',
+                  decoration: InputDecoration(
+                    labelText: loc.notesLabel,
+                    hintText: loc.optionalPaymentDetailsHint,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -2070,7 +2315,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                     icon: const Icon(Icons.calendar_today, size: 16),
                     label: Text(
                       dueDate == null
-                          ? 'Set Due Date (Optional)'
+                          ? loc.setDueDateOptional
                           : '${dueDate!.day}/${dueDate!.month}/${dueDate!.year}',
                     ),
                   ),
@@ -2081,7 +2326,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           actions: [
             TextButton(
               onPressed: isSubmitting ? null : () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(loc.cancel),
             ),
             FilledButton(
               onPressed: isSubmitting
@@ -2090,8 +2335,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                       final amount = double.tryParse(amountController.text.trim()) ?? 0;
                       if (titleController.text.trim().isEmpty || amount <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Title and a valid amount are required'),
+                          SnackBar(
+                            content: Text(loc.titleAndValidAmountRequired),
                             backgroundColor: AppColors.error,
                           ),
                         );
@@ -2131,6 +2376,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     required double amount,
     required DateTime? dueDate,
   }) async {
+    final loc = AppLocalizations.of(context);
     final lawyerId = widget.caseModel.acceptedLawyerId;
     final clientId = widget.caseModel.clientId;
 
@@ -2153,7 +2399,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         userId: clientId,
         actorId: lawyerId,
         type: NotificationType.generic,
-        title: 'New invoice created',
+        title: loc.newInvoiceCreated,
         message: '$title - PKR ${amount.toStringAsFixed(0)}',
         referenceType: 'case_invoice',
         referenceId: widget.caseModel.caseId,
@@ -2165,7 +2411,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         userId: lawyerId,
         actorId: lawyerId,
         type: NotificationType.generic,
-        title: 'Invoice sent to client',
+        title: loc.invoiceSentToClient,
         message: '$title - PKR ${amount.toStringAsFixed(0)}',
         referenceType: 'case_invoice',
         referenceId: widget.caseModel.caseId,
@@ -2176,12 +2422,13 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invoice created successfully')),
+        SnackBar(content: Text(loc.invoiceCreatedSuccessfully)),
       );
     }
   }
 
   Future<void> _payInvoice(CaseInvoiceModel invoice) async {
+    final loc = AppLocalizations.of(context);
     final lawyerId = widget.caseModel.acceptedLawyerId;
     final clientId = widget.caseModel.clientId;
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
@@ -2191,34 +2438,50 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     if (currentUserId != invoice.payerId) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Only payer can mark invoice paid')),
+          SnackBar(content: Text(loc.onlyPayerCanMarkInvoicePaid)),
         );
       }
       return;
     }
 
-    // Pre-check balance for a clean low-budget message before transaction errors.
-    final payerBalance = await _walletService.getWalletBalance(currentUserId);
-    if (payerBalance < invoice.amount) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Insufficient balance. Available: PKR ${payerBalance.toStringAsFixed(2)}, Required: PKR ${invoice.amount.toStringAsFixed(2)}',
-            ),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-      return;
-    }
-
+    if (mounted) setState(() => _isPayingInvoice = true);
     try {
-      await _invoiceService.payInvoice(
-        caseId: widget.caseModel.caseId,
-        invoiceId: invoice.id,
-        currentUserId: currentUserId,
-      );
+      if (invoice.status == 'held') {
+        final holdOperationId = invoice.holdOperationId;
+        if (holdOperationId == null || holdOperationId.isEmpty) {
+          throw Exception('Invoice hold not found');
+        }
+
+        await _invoiceService.releaseInvoicePayment(
+          caseId: widget.caseModel.caseId,
+          invoiceId: invoice.id,
+          currentUserId: currentUserId,
+        );
+      } else {
+        final payerBalance = await _walletService.getWalletBalance(currentUserId);
+        if (payerBalance < invoice.amount) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  loc.insufficientBalanceForInvoice(
+                    payerBalance.toStringAsFixed(2),
+                    invoice.amount.toStringAsFixed(2),
+                  ),
+                ),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+          return;
+        }
+
+        await _invoiceService.payInvoice(
+          caseId: widget.caseModel.caseId,
+          invoiceId: invoice.id,
+          currentUserId: currentUserId,
+        );
+      }
 
       // Best-effort notifications/logs: payment should still count as success if these fail.
       try {
@@ -2228,8 +2491,10 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             userId: clientId,
             actorId: clientId,
             type: NotificationType.paymentSuccess,
-            title: 'Invoice paid',
-            message: '${invoice.title} has been marked as paid',
+            title: invoice.status == 'held' ? loc.invoiceReleased : loc.invoiceHeld,
+            message: invoice.status == 'held'
+                ? loc.invoiceReleasedToLawyer(invoice.title)
+                : loc.invoiceHeldInEscrow(invoice.title),
             referenceType: 'case_invoice',
             referenceId: invoice.id,
             payload: {'caseId': widget.caseModel.caseId, 'invoiceId': invoice.id},
@@ -2240,8 +2505,10 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             userId: lawyerId,
             actorId: clientId,
             type: NotificationType.paymentSuccess,
-            title: 'Client marked invoice as paid',
-            message: '${invoice.title} has been marked as paid',
+            title: invoice.status == 'held' ? loc.invoiceReleasedByClient : loc.invoicePaymentHeld,
+            message: invoice.status == 'held'
+              ? loc.invoiceReleasedByClientMessage(invoice.title)
+              : loc.invoicePaymentHeldMessage(invoice.title),
             referenceType: 'case_invoice',
             referenceId: invoice.id,
             payload: {'caseId': widget.caseModel.caseId, 'invoiceId': invoice.id},
@@ -2254,8 +2521,10 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             id: '',
             userId: clientId,
             type: UpdateType.paymentAccepted,
-            title: 'Invoice paid',
-            message: '${invoice.title} payment completed',
+            title: invoice.status == 'held' ? loc.invoiceReleased : loc.invoiceHeld,
+            message: invoice.status == 'held'
+                ? loc.invoiceReleaseCompleted(invoice.title)
+                : loc.invoicePaymentHeldInEscrow(invoice.title),
             relatedId: widget.caseModel.caseId,
             timestamp: DateTime.now(),
           ),
@@ -2266,8 +2535,10 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
             id: '',
             userId: lawyerId,
             type: UpdateType.paymentAccepted,
-            title: 'Client payment received',
-            message: '${invoice.title} marked paid in workspace',
+            title: invoice.status == 'held' ? loc.invoiceReleased : loc.invoicePaymentHeld,
+            message: invoice.status == 'held'
+                ? loc.invoiceMarkedReleasedInWorkspace(invoice.title)
+                : loc.invoiceHeldInWorkspace(invoice.title),
             relatedId: widget.caseModel.caseId,
             timestamp: DateTime.now(),
           ),
@@ -2278,8 +2549,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invoice marked as paid'),
+          SnackBar(
+            content: Text(loc.invoiceUpdatedSuccessfully),
             backgroundColor: AppColors.success,
             duration: Duration(seconds: 2),
           ),
@@ -2296,6 +2567,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isPayingInvoice = false);
     }
   }
 
@@ -2320,6 +2593,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Future<void> _payMilestone(CaseMilestoneModel milestone) async {
+    final loc = AppLocalizations.of(context);
     final lawyerId = widget.caseModel.acceptedLawyerId;
     final clientId = widget.caseModel.clientId;
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
@@ -2329,7 +2603,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     if (currentUserId != clientId) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Only client can pay milestone')),
+          SnackBar(content: Text(loc.onlyClientCanPayMilestone)),
         );
       }
       return;
@@ -2338,7 +2612,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     if (milestone.status == 'paid') {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This milestone is already paid')),
+          SnackBar(content: Text(loc.milestoneAlreadyPaid)),
         );
       }
       return;
@@ -2351,7 +2625,10 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Insufficient balance. Available: PKR ${walletBalance.toStringAsFixed(2)}, Required: PKR ${milestone.paymentAmount.toStringAsFixed(2)}',
+              loc.insufficientBalanceForMilestone(
+                walletBalance.toStringAsFixed(2),
+                milestone.paymentAmount.toStringAsFixed(2),
+              ),
             ),
             backgroundColor: AppColors.error,
           ),
@@ -2360,23 +2637,23 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       return;
     }
 
+    if (mounted) setState(() => _isPayingMilestone = true);
     try {
-      // Perform atomic transfer from client to lawyer
-      await _walletService.transfer(
-        fromUserId: clientId,
-        toUserId: lawyerId,
+      final opId = 'milestone_payment_${milestone.id}_${DateTime.now().millisecondsSinceEpoch}';
+      // Hold funds in escrow from client
+      await _walletService.holdFunds(
+        userId: clientId,
         amount: milestone.paymentAmount,
-        operationId: 'milestone_payment_${milestone.id}_${DateTime.now().millisecondsSinceEpoch}',
-        debitReason: 'Milestone payment: ${milestone.title}',
-        creditReason: 'Received milestone payment: ${milestone.title}',
+        operationId: opId,
+        reason: loc.milestonePaymentReason(milestone.title),
         referenceType: 'case_milestone',
         referenceId: milestone.id,
       );
 
-      await _milestoneService.updateStatus(
+      await _milestoneService.markAsHeld(
         caseId: widget.caseModel.caseId,
         milestoneId: milestone.id,
-        status: 'paid',
+        holdOperationId: opId,
       );
 
       // Create notifications for both parties
@@ -2386,8 +2663,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           userId: clientId,
           actorId: clientId,
           type: NotificationType.paymentSuccess,
-          title: 'Milestone payment sent',
-          message: 'Payment of PKR ${milestone.paymentAmount.toStringAsFixed(0)} sent for "${milestone.title}"',
+          title: loc.milestonePaymentHeld,
+          message: loc.milestonePaymentHeldMessage(milestone.paymentAmount.toStringAsFixed(0), milestone.title),
           referenceType: 'case_milestone',
           referenceId: milestone.id,
           payload: {'caseId': widget.caseModel.caseId, 'milestoneId': milestone.id},
@@ -2398,8 +2675,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           userId: lawyerId,
           actorId: clientId,
           type: NotificationType.paymentSuccess,
-          title: 'Milestone payment received',
-          message: 'You received PKR ${milestone.paymentAmount.toStringAsFixed(0)} for "${milestone.title}"',
+          title: loc.milestonePaymentAwaitingRelease,
+          message: loc.milestonePaymentAwaitingReleaseMessage(milestone.paymentAmount.toStringAsFixed(0), milestone.title),
           referenceType: 'case_milestone',
           referenceId: milestone.id,
           payload: {'caseId': widget.caseModel.caseId, 'milestoneId': milestone.id},
@@ -2410,7 +2687,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Payment of PKR ${milestone.paymentAmount.toStringAsFixed(0)} sent successfully'),
+            content: Text(loc.milestonePaymentHeldInEscrow(milestone.paymentAmount.toStringAsFixed(0))),
             duration: const Duration(seconds: 2),
             backgroundColor: AppColors.success,
           ),
@@ -2421,18 +2698,22 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Payment failed: ${e.toString().replaceFirst('Exception: ', '')}',
+              loc.paymentFailedWithDetails(e.toString().replaceFirst('Exception: ', '')),
             ),
             duration: const Duration(seconds: 3),
             backgroundColor: AppColors.error,
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isPayingMilestone = false);
     }
   }
 
   Future<void> _showAddEventDialog() async {
     if (widget.isClient) return;
+
+    final loc = AppLocalizations.of(context);
 
     final nameController = TextEditingController();
     final placeController = TextEditingController();
@@ -2444,24 +2725,24 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add Case Event'),
+          title: Text(loc.addCaseEvent),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Event Name',
-                    hintText: 'e.g., Court Hearing',
+                  decoration: InputDecoration(
+                    labelText: loc.eventNameLabel,
+                    hintText: loc.eventNameHint,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 TextField(
                   controller: placeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Event Place',
-                    hintText: 'e.g., District Court Lahore',
+                  decoration: InputDecoration(
+                    labelText: loc.eventPlaceLabel,
+                    hintText: loc.eventPlaceHint,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -2512,7 +2793,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
           actions: [
             TextButton(
               onPressed: isSubmitting ? null : () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(loc.cancel),
             ),
             FilledButton(
               onPressed: isSubmitting
@@ -2523,8 +2804,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
                       if (name.isEmpty || place.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Event name and place are required'),
+                          SnackBar(
+                            content: Text(loc.eventNameAndPlaceRequired),
                             backgroundColor: AppColors.error,
                           ),
                         );
@@ -2553,7 +2834,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
                         color: Colors.white,
                       ),
                     )
-                  : const Text('Create Event'),
+                  : Text(loc.createEvent),
             ),
           ],
         ),
@@ -2573,8 +2854,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     if (currentUserId == null || lawyerId == null || lawyerId.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cannot create event for this case'),
+          SnackBar(
+            content: Text(loc.cannotCreateEventForThisCase),
             backgroundColor: AppColors.error,
           ),
         );
@@ -2602,7 +2883,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     final eventTimeText =
         '${scheduledAt.day}/${scheduledAt.month}/${scheduledAt.year} '
         '${scheduledAt.hour.toString().padLeft(2, '0')}:${scheduledAt.minute.toString().padLeft(2, '0')}';
-    final eventMessage = '$eventName at $place on $eventTimeText';
+    final eventMessage = loc.caseEventMessage(eventName, place, eventTimeText);
 
     await _notificationService.createBatchNotifications([
       AppNotification(
@@ -2610,7 +2891,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         userId: clientId,
         actorId: lawyerId,
         type: NotificationType.generic,
-        title: 'New case event added',
+        title: loc.newCaseEventAdded,
         message: eventMessage,
         referenceType: 'case_event',
         referenceId: eventId,
@@ -2627,7 +2908,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         userId: lawyerId,
         actorId: lawyerId,
         type: NotificationType.generic,
-        title: 'Event created successfully',
+        title: loc.eventCreatedSuccessfully,
         message: eventMessage,
         referenceType: 'case_event',
         referenceId: eventId,
@@ -2646,7 +2927,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         id: '',
         userId: clientId,
         type: UpdateType.hearingScheduled,
-        title: 'New event scheduled',
+        title: loc.newEventScheduled,
         message: eventMessage,
         relatedId: widget.caseModel.caseId,
         timestamp: DateTime.now(),
@@ -2658,7 +2939,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
         id: '',
         userId: lawyerId,
         type: UpdateType.hearingScheduled,
-        title: 'Event added to case',
+        title: loc.eventAddedToCase,
         message: eventMessage,
         relatedId: widget.caseModel.caseId,
         timestamp: DateTime.now(),
@@ -2667,8 +2948,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Event added and users notified'),
+        SnackBar(
+          content: Text(loc.eventAddedAndUsersNotified),
           backgroundColor: AppColors.success,
         ),
       );
@@ -2676,6 +2957,7 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Future<void> _uploadFile() async {
+    final loc = AppLocalizations.of(context);
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
 
@@ -2685,8 +2967,8 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       if (count >= 3) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Upload limit reached (Max 3 files per party)'),
+            SnackBar(
+              content: Text(loc.uploadLimitReached),
               backgroundColor: AppColors.error,
             ),
           );
@@ -2716,14 +2998,14 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('File uploaded successfully!')),
+            SnackBar(content: Text(loc.fileUploadedSuccessfully)),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error uploading file: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('${loc.errorUploadingFile}: $e'), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -2734,27 +3016,28 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Future<String?> _showFileNameDialog(String initialName) async {
+    final loc = AppLocalizations.of(context);
     final controller = TextEditingController(text: initialName);
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Name your file'),
+        title: Text(loc.nameYourFile),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'File Name',
-            hintText: 'Enter name for other party to see',
+          decoration: InputDecoration(
+            labelText: loc.fileNameLabel,
+            hintText: loc.fileNameHint,
           ),
           autofocus: true,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(loc.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Upload'),
+            child: Text(loc.upload),
           ),
         ],
       ),
@@ -2762,24 +3045,25 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
   }
 
   Future<void> _renameFile(FileModel file) async {
+    final loc = AppLocalizations.of(context);
     final controller = TextEditingController(text: file.fileName);
     final String? newName = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Rename file'),
+        title: Text(loc.renameFile),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(labelText: 'New Name'),
+          decoration: InputDecoration(labelText: loc.newNameLabel),
           autofocus: true,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(loc.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Save'),
+            child: Text(loc.save),
           ),
         ],
       ),
@@ -2789,17 +3073,18 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       try {
         await FileService().updateFileName(widget.caseModel.caseId, file.id, newName.trim());
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('File renamed')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(loc.fileRenamed)));
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Rename failed: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${loc.renameFailed}: $e')));
         }
       }
     }
   }
 
   Future<void> _deleteFile(FileModel file) async {
+    final loc = AppLocalizations.of(context);
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (file.uploaderId != userId) return;
 
@@ -2807,17 +3092,17 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete File?'),
-        content: Text('Are you sure you want to delete "${file.fileName}"? This action cannot be undone.'),
+        title: Text(loc.deleteFileTitle),
+        content: Text(loc.deleteFileConfirm(file.fileName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(loc.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Delete'),
+            child: Text(loc.delete),
           ),
         ],
       ),
@@ -2829,19 +3114,20 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       await FileService().deleteFile(widget.caseModel.caseId, file);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('File deleted')),
+          SnackBar(content: Text(loc.fileDeleted)),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Delete failed: $e')),
+          SnackBar(content: Text('${loc.deleteFailed}: $e')),
         );
       }
     }
   }
 
   Future<void> _openFile(String url) async {
+    final loc = AppLocalizations.of(context);
     try {
       final uri = Uri.parse(url);
       // Directly try to launch, as canLaunchUrl is unreliable on newer Android versions 
@@ -2853,39 +3139,45 @@ class _ActiveCaseWorkspaceScreenState extends State<ActiveCaseWorkspaceScreen>
       
       if (!launched && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open file. No application found to handle this link.')),
+          SnackBar(content: Text(loc.couldNotOpenFile)),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening file: $e')),
+          SnackBar(content: Text('${loc.errorOpeningFile}: $e')),
         );
       }
     }
   }
 
   Widget _buildInfoCard(String title, Widget content) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.grey200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+          child: Text(
             title,
             style: const TextStyle(
-                color: AppColors.textSecondary, fontWeight: FontWeight.bold),
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
           ),
-          const SizedBox(height: 12),
-          content,
-        ],
-      ),
+        ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: AppColors.grey100, width: 1),
+            ),
+          ),
+          child: content,
+        ),
+      ],
     );
   }
 }
@@ -2920,12 +3212,16 @@ class _RequestConsultationSheet extends StatefulWidget {
 
 class _RequestConsultationSheetState extends State<_RequestConsultationSheet> {
   String _type = 'video';
+  final _note = '';
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
   TimeOfDay _selectedTime = const TimeOfDay(hour: 10, minute: 0);
   bool _isSubmitting = false;
 
+  AppLocalizations get loc => AppLocalizations.of(context);
+
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -2937,8 +3233,8 @@ class _RequestConsultationSheetState extends State<_RequestConsultationSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Request Consultation',
+          Text(
+            loc.requestConsultation,
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -2954,10 +3250,10 @@ class _RequestConsultationSheetState extends State<_RequestConsultationSheet> {
           Row(
             children: [
               _buildTypeChip(
-                  'video', 'Video Call', PhosphorIconsRegular.videoCamera),
+                  'video', loc.videoCall, PhosphorIconsRegular.videoCamera),
               const SizedBox(width: 8),
               _buildTypeChip(
-                  'in_person', 'In-Person', PhosphorIconsRegular.usersThree),
+                  'in_person', loc.inPerson, PhosphorIconsRegular.usersThree),
             ],
           ),
 
@@ -2976,7 +3272,7 @@ class _RequestConsultationSheetState extends State<_RequestConsultationSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Meeting Location',
+                    loc.meetingLocation,
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -2996,7 +3292,7 @@ class _RequestConsultationSheetState extends State<_RequestConsultationSheet> {
                     )
                   else
                     Text(
-                      'No lawyer office location set. Please agree on location via chat.',
+                      loc.noLawyerOfficeLocationSet,
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.warning,
@@ -3103,8 +3399,8 @@ class _RequestConsultationSheetState extends State<_RequestConsultationSheet> {
       if (candidate.isBefore(DateTime.now())) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Selected time has already passed. Please choose a future time.'),
+            SnackBar(
+              content: Text(loc.selectedTimeAlreadyPassed),
               backgroundColor: AppColors.error,
             ),
           );
@@ -3146,12 +3442,52 @@ class _RequestConsultationSheetState extends State<_RequestConsultationSheet> {
       if (scheduledAt.isBefore(DateTime.now())) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please select a future date and time for consultation.'),
+            SnackBar(
+              content: Text(loc.pleaseSelectFutureConsultationDateTime),
               backgroundColor: AppColors.error,
             ),
           );
         }
+        return;
+      }
+
+      final durationMinutes = 30;
+
+      // Validate availability and conflicts before creating the consultation
+      final availabilityService = LawyerAvailabilityService();
+      final isAvailable = await availabilityService.isTimeWithinAvailability(
+        widget.targetId,
+        scheduledAt,
+        durationMinutes,
+      );
+      if (!isAvailable) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(loc.selectedTimeOutsideLawyerAvailability),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        setState(() => _isSubmitting = false);
+        return;
+      }
+
+      final hasConflict = await ConsultationService().checkTimeSlotConflict(
+        widget.targetId,
+        scheduledAt,
+        durationMinutes,
+      );
+      if (hasConflict) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(loc.selectedTimeConflictsWithAnotherConsultation),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        setState(() => _isSubmitting = false);
         return;
       }
 
@@ -3167,6 +3503,7 @@ class _RequestConsultationSheetState extends State<_RequestConsultationSheet> {
         lawyerId: widget.isClient ? widget.targetId : user.uid,
         clientAvatar: widget.clientAvatar,
         lawyerAvatar: widget.lawyerAvatar,
+        durationMinutes: durationMinutes,
         type: _type,
         lawyerOfficeLocation: _type == 'in_person' ? widget.lawyerOfficeLocation : null,
         status: 'pending',
@@ -3176,21 +3513,21 @@ class _RequestConsultationSheetState extends State<_RequestConsultationSheet> {
 
       // Pass user's display name or use a default
       final requesterName = user.displayName ?? 'User';
-      final requesterRole = widget.isClient ? 'Client' : 'Lawyer';
+      final requesterRole = widget.isClient ? loc.client : loc.lawyer;
       
       await ConsultationService().requestConsultation(consultation, requesterName, requesterRole);
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Consultation request sent!')),
+          SnackBar(content: Text(loc.consultationRequestSent)),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Error: $e'), backgroundColor: AppColors.error),
+              content: Text('${loc.error}: $e'), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -3202,23 +3539,21 @@ class _RequestConsultationSheetState extends State<_RequestConsultationSheet> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Consultation Limit Reached'),
-        content: const Text(
-          'Each workspace includes 3 free consultations. You have reached this limit. Please pay to schedule more.',
-        ),
+        title: Text(loc.consultationLimitReached),
+        content: Text(loc.consultationLimitReachedDescription),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(loc.cancel),
           ),
           FilledButton(
             onPressed: () {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Payment gateway coming soon...')),
+                SnackBar(content: Text(loc.paymentGatewayComingSoon)),
               );
             },
-            child: const Text('Pay for 1 More (\$10)'),
+            child: Text(loc.payForOneMore),
           ),
         ],
       ),

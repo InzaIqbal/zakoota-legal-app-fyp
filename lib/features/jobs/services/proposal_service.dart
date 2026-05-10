@@ -2,10 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/proposal.dart';
 import '../../notifications/models/notification_model.dart';
 import '../../notifications/services/notification_service.dart';
+import '../../ads/services/lawyer_ad_service.dart';
+import '../../wallet/services/wallet_service.dart';
 
 class ProposalService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final NotificationService _notificationService = NotificationService();
+  final WalletService _walletService = WalletService();
 
   // Submit a Proposal
   Future<void> submitProposal({
@@ -176,7 +179,6 @@ class ProposalService {
 
   // Accept a Proposal (and reject others)
   Future<void> acceptProposal(String caseId, String proposalId) async {
-    final batch = _firestore.batch();
     final proposalsRef =
         _firestore.collection('cases').doc(caseId).collection('proposals');
 
@@ -192,6 +194,42 @@ class ProposalService {
       }
     }
 
+    if (acceptedProposal == null) {
+      throw Exception('Proposal not found');
+    }
+
+    final acceptedLawyerId = _getLawyerIdFromProposal(querySnapshot, proposalId);
+    if (acceptedLawyerId.isEmpty) {
+      throw Exception('Lawyer not found for selected proposal');
+    }
+
+    final caseRef = _firestore.collection('cases').doc(caseId);
+    final caseDoc = await caseRef.get();
+    final caseData = caseDoc.data();
+    final clientId = caseData?['clientId'] as String?;
+    if (clientId == null || clientId.isEmpty) {
+      throw Exception('Client not found for this case');
+    }
+
+    final holdAmount = acceptedProposal.bidAmount;
+    final holdOperationId = 'proposal_accept_${caseId}_$proposalId';
+
+    await _walletService.holdFunds(
+      userId: clientId,
+      amount: holdAmount,
+      operationId: holdOperationId,
+      reason: 'proposal_acceptance_hold',
+      referenceType: 'case_proposal',
+      referenceId: proposalId,
+      metadata: {
+        'caseId': caseId,
+        'proposalId': proposalId,
+        'lawyerId': acceptedLawyerId,
+      },
+    );
+
+    final batch = _firestore.batch();
+
     for (var doc in querySnapshot.docs) {
       if (doc.id == proposalId) {
         // Accept the target proposal
@@ -203,21 +241,27 @@ class ProposalService {
     }
 
     // 2. Update Case status, acceptedLawyerId, and lawyer's agreed budget
-    final caseRef = _firestore.collection('cases').doc(caseId);
     batch.update(caseRef, {
       'status': 'active', // Changed from 'open' to 'active'
-      'acceptedLawyerId': _getLawyerIdFromProposal(querySnapshot, proposalId),
-      'agreedBudget': acceptedProposal?.bidAmount ?? 0.0, // Store lawyer's agreed budget
+      'acceptedLawyerId': acceptedLawyerId,
+      'agreedBudget': holdAmount, // Store lawyer's agreed budget
       'budgetSource': 'lawyer', // Mark that budget is from lawyer's proposal, not client
+      'heldAmount': holdAmount,
+      'paymentStatus': 'held',
+      'holdOperationId': holdOperationId,
     });
 
     await batch.commit();
 
-    final caseDoc = await _firestore.collection('cases').doc(caseId).get();
-    final clientId = caseDoc.data()?['clientId'] as String?;
-    final acceptedLawyerId = caseDoc.data()?['acceptedLawyerId'] as String?;
+    // 3. Check and manage ad status based on case limit
+    try {
+      final lawyerAdService = LawyerAdService();
+      await lawyerAdService.checkAndManageAdStatus(acceptedLawyerId);
+    } catch (e) {
+      print('Error checking ad status: $e');
+    }
 
-    if (acceptedLawyerId != null && acceptedLawyerId.isNotEmpty) {
+    if (acceptedLawyerId.isNotEmpty) {
       await _notificationService.createForUser(
         userId: acceptedLawyerId,
         actorId: clientId,

@@ -180,6 +180,11 @@ class ConsultationModel {
   final DateTime? updatedAt;
   final DateTime? acceptedAt; // When the other party accepted
   final DateTime? reminderSentAt; // Track if reminder was sent
+  
+  // Availability Management Fields
+  final bool isTimeSlotLocked; // True if this time slot is booked and locked
+  final List<String> conflictingConsultationIds; // IDs of consultations that overlap with this one
+  final String? availabilityVersionId; // Reference to lawyer availability version when this was booked
 
   ConsultationModel({
     required this.id,
@@ -219,6 +224,9 @@ class ConsultationModel {
     this.acceptedAt,
     this.reminderSentAt,
     this.caseStatus = 'active',
+    this.isTimeSlotLocked = false,
+    this.conflictingConsultationIds = const [],
+    this.availabilityVersionId,
   });
 
   Map<String, dynamic> toMap() {
@@ -260,6 +268,9 @@ class ConsultationModel {
       'acceptedAt': acceptedAt != null ? Timestamp.fromDate(acceptedAt!) : null,
       'reminderSentAt': reminderSentAt != null ? Timestamp.fromDate(reminderSentAt!) : null,
       'caseStatus': caseStatus,
+      'isTimeSlotLocked': isTimeSlotLocked,
+      'conflictingConsultationIds': conflictingConsultationIds,
+      'availabilityVersionId': availabilityVersionId,
     };
   }
 
@@ -312,6 +323,9 @@ class ConsultationModel {
       acceptedAt: map['acceptedAt'] != null ? (map['acceptedAt'] as Timestamp).toDate() : null,
       reminderSentAt: map['reminderSentAt'] != null ? (map['reminderSentAt'] as Timestamp).toDate() : null,
       caseStatus: map['caseStatus'] ?? 'active',
+      isTimeSlotLocked: map['isTimeSlotLocked'] ?? false,
+      conflictingConsultationIds: List<String>.from(map['conflictingConsultationIds'] as List<dynamic>? ?? []),
+      availabilityVersionId: map['availabilityVersionId'],
     );
   }
 
@@ -353,6 +367,9 @@ class ConsultationModel {
     DateTime? acceptedAt,
     DateTime? reminderSentAt,
     String? caseStatus,
+    bool? isTimeSlotLocked,
+    List<String>? conflictingConsultationIds,
+    String? availabilityVersionId,
   }) {
     return ConsultationModel(
       id: id ?? this.id,
@@ -391,6 +408,9 @@ class ConsultationModel {
       acceptedAt: acceptedAt ?? this.acceptedAt,
       reminderSentAt: reminderSentAt ?? this.reminderSentAt,
       caseStatus: caseStatus ?? this.caseStatus,
+      isTimeSlotLocked: isTimeSlotLocked ?? this.isTimeSlotLocked,
+      conflictingConsultationIds: conflictingConsultationIds ?? this.conflictingConsultationIds,
+      availabilityVersionId: availabilityVersionId ?? this.availabilityVersionId,
     );
   }
 

@@ -3,12 +3,12 @@ import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
-import '../../notifications/services/notification_service.dart';
+import '../../chat/services/chat_service.dart';
 
 /// Main wrapper for client screens with bottom navigation bar
 class ClientMainWrapper extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
-  static final NotificationService _notificationService = NotificationService();
+  static final ChatService _chatService = ChatService();
   static final AuthService _authService = AuthService();
 
   const ClientMainWrapper({
@@ -116,7 +116,7 @@ class ClientMainWrapper extends StatelessWidget {
     }
 
     return StreamBuilder<int>(
-      stream: _notificationService.streamUnreadCount(user.uid),
+      stream: _chatService.streamTotalUnreadCount(user.uid),
       builder: (context, snapshot) {
         final unreadCount = snapshot.data ?? 0;
         return Stack(

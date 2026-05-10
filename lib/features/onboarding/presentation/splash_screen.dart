@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 
 /// Splash Screen with animated logo
@@ -55,6 +56,7 @@ class _SplashScreenState extends State<SplashScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
+    final loc = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -84,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen> {
                         ),
                         const SizedBox(height: AppSpacing.xl + 10),
                         Text(
-                          'ZAKOOTA',
+                          loc.appBrand,
                           style: textTheme.displaySmall?.copyWith(
                             color: AppColors.primary,
                             letterSpacing: 6,
@@ -93,7 +95,7 @@ class _SplashScreenState extends State<SplashScreen> {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          'LEGAL SERVICES MARKETPLACE',
+                          loc.appTagline,
                           style: textTheme.bodySmall?.copyWith(
                             color: AppColors.textSecondary,
                             letterSpacing: 2.0,

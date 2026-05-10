@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import '../../../l10n/app_localizations.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../models/lawyer_ad_model.dart';
@@ -98,12 +99,13 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
     if (user == null) return;
 
     setState(() => _isSubmitting = true);
+    final loc = AppLocalizations.of(context);
     try {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
-      final lawyerName = userDoc.data()?['fullName'] ?? 'Lawyer';
+      final lawyerName = userDoc.data()?['fullName'] ?? loc.lawyer;
 
       final id = widget.adId ?? FirebaseFirestore.instance.collection('lawyer_ads').doc().id;
       final now = DateTime.now();
@@ -142,7 +144,7 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_isEditing ? 'Ad updated successfully' : 'Ad published successfully'),
+          content: Text(_isEditing ? loc.adUpdatedSuccessfully : loc.adPublishedSuccessfully),
           backgroundColor: AppColors.success,
         ),
       );
@@ -151,7 +153,7 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to save ad: $e'),
+          content: Text('${loc.failedToSaveAd}: $e'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -162,6 +164,7 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -173,7 +176,7 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
           onPressed: () => context.pop(),
         ),
         title: Text(
-          _isEditing ? 'Edit Service Ad' : 'Create New Service',
+          _isEditing ? loc.editServiceAd : loc.createNewService,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -190,13 +193,13 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
                 padding: const EdgeInsets.all(AppSpacing.md),
                 children: [
                   // Section: Basic Info
-                  _SectionHeader(title: 'Basic Information', icon: PhosphorIconsRegular.info),
+                  _SectionHeader(title: loc.basicInformation, icon: PhosphorIconsRegular.info),
                   const SizedBox(height: AppSpacing.sm),
                   _field(
                     child: TextFormField(
                       controller: _titleController,
-                      decoration: _inputDecoration('Ad Title', hint: 'e.g. Criminal Defense Consultation'),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Title is required' : null,
+                      decoration: _inputDecoration(loc.adTitle, hint: loc.exampleAdTitle),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? loc.titleIsRequired : null,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -204,15 +207,15 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
                     child: TextFormField(
                       controller: _descriptionController,
                       maxLines: 4,
-                      decoration: _inputDecoration('Description', hint: 'Describe your service in detail...'),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Description is required' : null,
+                      decoration: _inputDecoration(loc.description, hint: loc.describeYourService),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? loc.descriptionIsRequired : null,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   _field(
                     child: DropdownButtonFormField<String>(
                       value: _selectedCategory,
-                      decoration: _inputDecoration('Practice Area'),
+                      decoration: _inputDecoration(loc.practiceArea),
                       items: _categories
                           .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                           .toList(),
@@ -221,7 +224,7 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
                   ),
 
                   const SizedBox(height: AppSpacing.lg),
-                  _SectionHeader(title: 'Pricing & Duration', icon: PhosphorIconsRegular.currencyDollar),
+                  _SectionHeader(title: loc.pricingAndDuration, icon: PhosphorIconsRegular.currencyDollar),
                   const SizedBox(height: AppSpacing.sm),
 
                   Row(
@@ -230,7 +233,7 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
                         child: _field(
                           child: DropdownButtonFormField<String>(
                             value: _pricingType,
-                            decoration: _inputDecoration('Pricing Type'),
+                            decoration: _inputDecoration(loc.pricingType),
                             items: const [
                               DropdownMenuItem(value: 'fixed', child: Text('Fixed Price')),
                               DropdownMenuItem(value: 'hourly', child: Text('Per Hour')),
@@ -245,10 +248,10 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
                           child: TextFormField(
                             controller: _priceController,
                             keyboardType: TextInputType.number,
-                            decoration: _inputDecoration('Price (PKR)'),
+                            decoration: _inputDecoration(loc.pricePkr),
                             validator: (v) {
                               final parsed = double.tryParse(v ?? '');
-                              if (parsed == null || parsed <= 0) return 'Enter valid price';
+                              if (parsed == null || parsed <= 0) return loc.enterValidPrice;
                               return null;
                             },
                           ),
@@ -260,19 +263,19 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
                   _field(
                     child: TextFormField(
                       controller: _durationController,
-                      decoration: _inputDecoration('Estimated Duration', hint: 'e.g. 1-2 weeks, 3 sessions'),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Duration is required' : null,
+                      decoration: _inputDecoration(loc.estimatedDuration, hint: loc.exampleDuration),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? loc.durationIsRequired : null,
                     ),
                   ),
 
                   const SizedBox(height: AppSpacing.lg),
-                  _SectionHeader(title: 'Location & Requirements', icon: PhosphorIconsRegular.mapPin),
+                  _SectionHeader(title: loc.locationAndRequirements, icon: PhosphorIconsRegular.mapPin),
                   const SizedBox(height: AppSpacing.sm),
 
                   _field(
                     child: DropdownButtonFormField<String>(
                       value: _locationMode,
-                      decoration: _inputDecoration('Service Mode'),
+                      decoration: _inputDecoration(loc.serviceMode),
                       items: const [
                         DropdownMenuItem(value: 'Remote', child: Text('🖥  Remote / Online')),
                         DropdownMenuItem(value: 'In-Person', child: Text('🏢  In-Person')),
@@ -286,12 +289,12 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
                     child: TextFormField(
                       controller: _docsController,
                       decoration: _inputDecoration(
-                        'Required Client Documents',
-                        hint: 'e.g. CNIC, FIR copy, property docs (comma-separated)',
+                        loc.requiredClientDocuments,
+                        hint: loc.exampleRequiredDocs,
                       ),
                       maxLines: 2,
                       validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Please list required documents'
+                          ? loc.pleaseListRequiredDocuments
                           : null,
                     ),
                   ),
@@ -313,7 +316,7 @@ class _CreateLawyerAdScreenState extends State<CreateLawyerAdScreen> {
                               size: 18,
                             ),
                       label: Text(
-                        _isEditing ? 'Save Changes' : 'Publish Ad',
+                        _isEditing ? loc.saveChanges : loc.publishAd,
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
                       style: FilledButton.styleFrom(

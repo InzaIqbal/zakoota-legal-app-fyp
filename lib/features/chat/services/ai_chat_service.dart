@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 class AIChatService {
   // CORRECT URL with /api
   static const String _baseUrl =
-      'https://zakoota-backend-production.vercel.app';
+      'https://zing-fix-final-new-1.onrender.com';
   static const String _chatPath = '/api/chat';
 
   static Future<String> sendMessage(String message) async {

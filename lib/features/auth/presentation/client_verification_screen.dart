@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
 
@@ -43,11 +44,11 @@ class _ClientVerificationScreenState extends State<ClientVerificationScreen> {
     }
   }
 
-  Future<void> _handleSubmit() async {
+  Future<void> _handleSubmit(AppLocalizations loc) async {
     if (_cnicImage == null || _selfieImage == null) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Please upload both CNIC and Selfie to proceed.';
+        _errorMessage = loc.uploadBothCnicAndSelfie;
       });
       return;
     }
@@ -84,10 +85,12 @@ class _ClientVerificationScreenState extends State<ClientVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Verify Identity'),
+        title: Text(loc.verifyIdentityTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -102,7 +105,7 @@ class _ClientVerificationScreenState extends State<ClientVerificationScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Identity Verification',
+                loc.identityVerification,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
@@ -110,7 +113,7 @@ class _ClientVerificationScreenState extends State<ClientVerificationScreen> {
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                'Please upload your CNIC and a selfie to verify your account.',
+                loc.uploadCnicAndSelfie,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -135,18 +138,20 @@ class _ClientVerificationScreenState extends State<ClientVerificationScreen> {
 
               // CNIC Upload Box
               _buildUploadBox(
-                label: 'CNIC (Front)',
+                label: loc.cnicFrontLabel,
                 file: _cnicImage,
                 onTap: () => _pickImage(true),
+                loc: loc,
               ),
 
               const SizedBox(height: AppSpacing.lg),
 
               // Selfie Upload Box
               _buildUploadBox(
-                label: 'Your Selfie',
+                label: loc.yourSelfieLabel,
                 file: _selfieImage,
                 onTap: () => _pickImage(false),
+                loc: loc,
               ),
 
               const SizedBox(height: AppSpacing.xl),
@@ -155,7 +160,7 @@ class _ClientVerificationScreenState extends State<ClientVerificationScreen> {
               SizedBox(
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _isUploading ? null : _handleSubmit,
+                  onPressed: _isUploading ? null : () => _handleSubmit(loc),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
@@ -176,12 +181,12 @@ class _ClientVerificationScreenState extends State<ClientVerificationScreen> {
                               ),
                             ),
                             const SizedBox(width: 12),
-                            const Text('Uploading...'),
+                            Text(loc.uploading),
                           ],
                         )
-                      : const Text(
-                          'Submit Verification',
-                          style: TextStyle(
+                      : Text(
+                          loc.submitVerification,
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -199,6 +204,7 @@ class _ClientVerificationScreenState extends State<ClientVerificationScreen> {
     required String label,
     required XFile? file,
     required VoidCallback onTap,
+    required AppLocalizations loc,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -239,7 +245,7 @@ class _ClientVerificationScreenState extends State<ClientVerificationScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'Tap to upload $label',
+                    loc.tapToUpload(label),
                     style: TextStyle(
                       color: Colors.grey.shade600,
                       fontWeight: FontWeight.w500,

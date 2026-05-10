@@ -8,6 +8,7 @@ import '../../chat/models/message_model.dart';
 import '../../lawyers/services/lawyer_service.dart';
 import '../../notifications/models/notification_model.dart';
 import '../../notifications/services/notification_service.dart';
+import '../../lawyer_auth/services/lawyer_availability_service.dart';
 
 class ConsultationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -17,9 +18,37 @@ class ConsultationService {
 
   /// Create a consultation request
   Future<void> requestConsultation(ConsultationModel consultation, String requesterName, String requesterRole) async {
+    // Defensive checks: ensure requested time is within lawyer availability and doesn't conflict
+    ConsultationModel consultationToStore = consultation;
+    try {
+      final availabilityService = LawyerAvailabilityService();
+      final availability = await availabilityService.getAvailability(consultation.targetId);
+      final isWithin = await availabilityService.isTimeWithinAvailability(
+        consultation.targetId,
+        consultation.scheduledAt,
+        consultation.durationMinutes,
+      );
+      if (!isWithin) {
+        throw Exception('Selected time is outside the lawyer\'s availability.');
+      }
+
+      final hasConflict = await checkTimeSlotConflict(
+        consultation.targetId,
+        consultation.scheduledAt,
+        consultation.durationMinutes,
+      );
+      if (hasConflict) {
+        throw Exception('Selected time conflicts with another consultation.');
+      }
+
+      // Attach availability version id for auditing
+      consultationToStore = consultationToStore.copyWith(availabilityVersionId: availability.availabilityVersionId);
+    } catch (e) {
+      rethrow;
+    }
     final activity = ConsultationActivity(
       id: _firestore.collection('tmp').doc().id,
-      userId: consultation.requesterId,
+      userId: consultationToStore.requesterId,
       userName: requesterName,
       userRole: requesterRole,
       action: 'created',
@@ -27,10 +56,10 @@ class ConsultationService {
     );
 
     // Fetch current case status
-    final caseDoc = await _firestore.collection('cases').doc(consultation.caseId).get();
+    final caseDoc = await _firestore.collection('cases').doc(consultationToStore.caseId).get();
     final currentCaseStatus = caseDoc.exists ? (caseDoc.data()?['status'] ?? 'active') : 'active';
 
-    final updatedConsultation = consultation.copyWith(
+    final updatedConsultation = consultationToStore.copyWith(
       activityLog: [activity],
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -39,23 +68,23 @@ class ConsultationService {
 
     await _firestore
         .collection('cases')
-        .doc(consultation.caseId)
+        .doc(consultationToStore.caseId)
         .collection('consultations')
-        .doc(consultation.id)
+        .doc(consultationToStore.id)
         .set(updatedConsultation.toMap());
 
     await _notificationService.createForUser(
-      userId: consultation.targetId,
-      actorId: consultation.requesterId,
+      userId: consultationToStore.targetId,
+      actorId: consultationToStore.requesterId,
       type: NotificationType.consultationRequested,
       title: 'New consultation request',
       message: '$requesterName requested a consultation.',
       referenceType: 'consultation',
-      referenceId: consultation.id,
-      route: '/case-details/${consultation.caseId}',
+      referenceId: consultationToStore.id,
+      route: '/case-details/${consultationToStore.caseId}',
       payload: {
-        'caseId': consultation.caseId,
-        'consultationId': consultation.id,
+        'caseId': consultationToStore.caseId,
+        'consultationId': consultationToStore.id,
       },
     );
   }
@@ -1015,5 +1044,111 @@ class ConsultationService {
         .collection('consultations')
         .get();
     return snapshot.docs.length;
+  }
+
+  /// Check for time slot conflicts
+  Future<bool> checkTimeSlotConflict(
+    String lawyerId,
+    DateTime scheduledAt,
+    int durationMinutes,
+  ) async {
+    try {
+      final endTime = scheduledAt.add(Duration(minutes: durationMinutes));
+
+      final conflictingDocs = await _firestore
+          .collectionGroup('consultations')
+          .where('lawyerId', isEqualTo: lawyerId)
+          .where('status', whereIn: ['pending', 'accepted', 'in-progress'])
+          .get();
+
+      for (var doc in conflictingDocs.docs) {
+        final data = doc.data();
+        final consultStart = (data['scheduledAt'] as Timestamp).toDate();
+        final consultDuration = (data['durationMinutes'] as num?)?.toInt() ?? 30;
+        final consultEnd = consultStart.add(Duration(minutes: consultDuration));
+
+        // Check for overlap
+        if (!(endTime.isBefore(consultStart) || scheduledAt.isAfter(consultEnd))) {
+          return true; // Conflict found
+        }
+      }
+      return false;
+    } catch (e) {
+      print('Error checking time slot conflict: $e');
+      return false;
+    }
+  }
+
+  /// Get conflicting consultations
+  Future<List<ConsultationModel>> getConflictingConsultations(
+    String lawyerId,
+    DateTime scheduledAt,
+    int durationMinutes,
+  ) async {
+    try {
+      final conflicting = <ConsultationModel>[];
+      final endTime = scheduledAt.add(Duration(minutes: durationMinutes));
+
+      final docs = await _firestore
+          .collectionGroup('consultations')
+          .where('lawyerId', isEqualTo: lawyerId)
+          .where('status', whereIn: ['pending', 'accepted', 'in-progress'])
+          .get();
+
+      for (var doc in docs.docs) {
+        final data = doc.data();
+        final consultStart = (data['scheduledAt'] as Timestamp).toDate();
+        final consultDuration = (data['durationMinutes'] as num?)?.toInt() ?? 30;
+        final consultEnd = consultStart.add(Duration(minutes: consultDuration));
+
+        // Check for overlap
+        if (!(endTime.isBefore(consultStart) || scheduledAt.isAfter(consultEnd))) {
+          try {
+            final consultation = ConsultationModel.fromMap(data, doc.id);
+            conflicting.add(consultation);
+          } catch (e) {
+            print('Error parsing conflicting consultation: $e');
+          }
+        }
+      }
+      return conflicting;
+    } catch (e) {
+      print('Error getting conflicting consultations: $e');
+      return [];
+    }
+  }
+
+  /// Lock time slot on consultation acceptance
+  Future<void> lockTimeSlot(String caseId, String consultationId) async {
+    try {
+      await _firestore
+          .collection('cases')
+          .doc(caseId)
+          .collection('consultations')
+          .doc(consultationId)
+          .update({
+        'isTimeSlotLocked': true,
+      });
+    } catch (e) {
+      print('Error locking time slot: $e');
+      rethrow;
+    }
+  }
+
+  /// Release time slot on consultation cancellation/rejection
+  Future<void> releaseTimeSlot(String caseId, String consultationId) async {
+    try {
+      await _firestore
+          .collection('cases')
+          .doc(caseId)
+          .collection('consultations')
+          .doc(consultationId)
+          .update({
+        'isTimeSlotLocked': false,
+      });
+    } catch (e) {
+      print('Error releasing time slot: $e');
+      rethrow;
+    }
   }
 }

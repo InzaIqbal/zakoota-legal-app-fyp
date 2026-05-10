@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 
 /// Welcome/Role Selection Screen
@@ -32,6 +33,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
+    final loc = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -47,7 +49,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               Column(
                 children: [
                   Text(
-                    'Welcome to Zakoota',
+                    loc.welcomeTitle,
                     style: textTheme.displaySmall?.copyWith(
                       color: colorScheme.primary,
                       fontWeight: FontWeight.w700,
@@ -56,7 +58,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'Choose your role to continue',
+                    loc.chooseYourRole,
                     style: textTheme.bodyLarge?.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -75,8 +77,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     Expanded(
                       child: _RoleCard(
                         icon: PhosphorIconsRegular.user,
-                        title: 'I am a Client',
-                        description: 'I need legal help.',
+                        title: loc.iAmClient,
+                        description: loc.iNeedLegalHelp,
                         isSelected: _selectedRole == UserRoles.client,
                         onTap: () => _selectRole(UserRoles.client),
                       ),
@@ -88,8 +90,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     Expanded(
                       child: _RoleCard(
                         icon: PhosphorIconsRegular.briefcase,
-                        title: 'I am a Lawyer',
-                        description: 'I want to find cases.',
+                        title: loc.iAmLawyer,
+                        description: loc.iWantToFindCases,
                         isSelected: _selectedRole == UserRoles.lawyer,
                         onTap: () => _selectRole(UserRoles.lawyer),
                       ),

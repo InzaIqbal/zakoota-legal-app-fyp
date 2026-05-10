@@ -9,6 +9,7 @@ import '../../ads/services/lawyer_ad_service.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import '../../../core/widgets/user_avatar.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 
 class LawyerProfileScreen extends StatefulWidget {
   const LawyerProfileScreen({super.key});
@@ -48,15 +49,74 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
             _isAcceptingCase = dbAvail;
           }
         });
+        await _syncAvailabilityWithCaseLimit(user.uid);
       }
     } catch (e) {
       debugPrint('LawyerProfileScreen prefetch error: $e');
     }
   }
 
+  Future<void> _showCaseLimitPopup() async {
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Limit reached'),
+        content: const Text(
+          'You can only accept new cases when you have fewer than 5 active cases.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _syncAvailabilityWithCaseLimit(String lawyerId) async {
+    final activeCases = await _lawyerAdService.getActiveCaseCount(lawyerId);
+    if (activeCases < 5) return;
+
+    if (!_isAcceptingCase) {
+      await _lawyerAdService.pauseAllActiveAdsForLawyer(lawyerId);
+      return;
+    }
+
+    setState(() {
+      _isAcceptingCase = false;
+    });
+
+    await FirebaseFirestore.instance.collection('users').doc(lawyerId).set({
+      'isAcceptingCases': false,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await _lawyerAdService.pauseAllActiveAdsForLawyer(lawyerId);
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Paused: you reached 5 active cases.'),
+      ),
+    );
+  }
+
   Future<void> _updateAvailability(bool value) async {
     final user = _authService.currentUser;
     if (user == null) return;
+
+    if (value) {
+      final activeCases = await _lawyerAdService.getActiveCaseCount(user.uid);
+      if (activeCases >= 5) {
+        setState(() {
+          _isAcceptingCase = false;
+        });
+        await _showCaseLimitPopup();
+        return;
+      }
+    }
 
     final previousValue = _isAcceptingCase;
     setState(() {
@@ -187,6 +247,8 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
             photoUrl = _cachedPhotoUrl;
           }
 
+          final loc = AppLocalizations.of(context);
+
           return Scaffold(
             backgroundColor: Colors.white,
             body: SingleChildScrollView(
@@ -258,6 +320,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
                             _MenuItem(
                               icon: PhosphorIconsRegular.bell,
                               title: 'Notifications',
+                              iconColor: AppColors.textSecondary,
                               onTap: () => context.push('/notifications'),
                             ),
                             _MenuItem(
@@ -434,7 +497,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
           ),
         ),
         subtitle: const Text(
-          'Turn off to hide your profile from search and pause your ads.',
+          'Turn off to hide your profile from search and pause your ads. Auto-off at 5 active cases.',
           style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
         secondary: Container(

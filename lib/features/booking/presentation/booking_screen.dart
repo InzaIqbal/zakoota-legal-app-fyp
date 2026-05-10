@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:intl/intl.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../lawyers/data/lawyer_mock_data.dart';
 import '../../lawyers/services/lawyer_service.dart';
@@ -82,6 +84,7 @@ class _BookingScreenState extends State<BookingScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final loc = AppLocalizations.of(context);
 
     if (_isLoading) {
       return const Scaffold(
@@ -93,9 +96,9 @@ class _BookingScreenState extends State<BookingScreen> {
     final lawyer = _lawyer;
 
     if (lawyer == null) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: AppColors.background,
-        body: Center(child: Text('Lawyer not found')),
+        body: Center(child: Text(loc.lawyerNotFound)),
       );
     }
 
@@ -115,7 +118,7 @@ class _BookingScreenState extends State<BookingScreen> {
           },
         ),
         title: Text(
-          'Book Consultation',
+          loc.bookConsultation,
           style: textTheme.headlineSmall?.copyWith(
             color: AppColors.primary,
             fontWeight: FontWeight.w700,
@@ -155,7 +158,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                 ),
                               ),
                               Text(
-                                lawyer.specializations.isNotEmpty ? lawyer.specializations.first : 'Lawyer Focus',
+                                lawyer.specializations.isNotEmpty ? lawyer.specializations.first : loc.lawyerFocus,
                                 style: textTheme.bodySmall?.copyWith(
                                   color: AppColors.textSecondary,
                                 ),
@@ -164,7 +167,7 @@ class _BookingScreenState extends State<BookingScreen> {
                           ),
                         ),
                         Text(
-                          'PKR ${lawyer.pricePerConsultation}',
+                          '${loc.currencyPKR} ${lawyer.pricePerConsultation}',
                           style: textTheme.titleMedium?.copyWith(
                             color: AppColors.secondary,
                             fontWeight: FontWeight.w700,
@@ -178,7 +181,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
                   // Consultation Topic
                   Text(
-                    'Topic / Brief Description',
+                    loc.topicBriefDescription,
                     style: textTheme.titleMedium?.copyWith(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w700,
@@ -188,7 +191,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   TextField(
                     controller: _topicController,
                     decoration: InputDecoration(
-                      hintText: 'What is this consultation about?',
+                      hintText: loc.consultationHint,
                       filled: true,
                       fillColor: AppColors.surface,
                       border: OutlineInputBorder(
@@ -208,7 +211,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
                   // Meeting Type
                   Text(
-                    'Meeting Preference',
+                    loc.meetingPreference,
                     style: textTheme.titleMedium?.copyWith(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w700,
@@ -219,7 +222,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     children: [
                       Expanded(
                         child: _MeetingTypeButton(
-                          title: 'Video Call',
+                          title: loc.videoCall,
                           icon: PhosphorIconsRegular.videoCamera,
                           isSelected: _meetingType == 'online',
                           onTap: () => setState(() => _meetingType = 'online'),
@@ -228,7 +231,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: _MeetingTypeButton(
-                          title: 'In-Person',
+                          title: loc.inPerson,
                           icon: PhosphorIconsRegular.users,
                           isSelected: _meetingType == 'in_person',
                           onTap: () => setState(() => _meetingType = 'in_person'),
@@ -241,7 +244,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
                   // Select Date Section
                   Text(
-                    'Select Date',
+                    loc.selectDate,
                     style: textTheme.titleLarge?.copyWith(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w700,
@@ -325,7 +328,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
                   // Select Time Section
                   Text(
-                    'Select Time',
+                    loc.selectTime,
                     style: textTheme.titleLarge?.copyWith(
                       color: AppColors.primary,
                       fontWeight: FontWeight.w700,
@@ -337,14 +340,14 @@ class _BookingScreenState extends State<BookingScreen> {
                   if (_selectedDate == null)
                     Center(
                       child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.xl),
-                        child: Text(
-                          'Please select a date first',
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textSecondary,
+                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          child: Text(
+                            loc.pleaseSelectDateFirst,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ),
-                      ),
                     )
                   else
                     GridView.builder(
@@ -435,7 +438,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Total',
+                        loc.totalLabel,
                         style: textTheme.titleMedium?.copyWith(
                           color: AppColors.textSecondary,
                         ),
@@ -481,7 +484,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         ),
                         disabledBackgroundColor: AppColors.grey300,
                       ),
-                      child: const Text('Review & Pay'),
+                      child: Text(loc.reviewAndPay),
                     ),
                   ),
                 ],
@@ -494,26 +497,21 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   String _getWeekday(DateTime date) {
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return weekdays[date.weekday - 1];
+    try {
+      final locale = Localizations.localeOf(context).toLanguageTag();
+      return DateFormat('EEE', locale).format(date);
+    } catch (_) {
+      return DateFormat('EEE').format(date);
+    }
   }
 
   String _getMonth(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
-    return months[date.month - 1];
+    try {
+      final locale = Localizations.localeOf(context).toLanguageTag();
+      return DateFormat('MMM', locale).format(date);
+    } catch (_) {
+      return DateFormat('MMM').format(date);
+    }
   }
 }
 

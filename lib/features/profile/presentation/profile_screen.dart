@@ -191,18 +191,13 @@ class ProfileScreen extends StatelessWidget {
                     _ProfileMenuItem(
                       icon: PhosphorIconsRegular.bell,
                       title: 'Notifications',
+                      iconColor: AppColors.textSecondary,
                       onTap: () => context.push('/notifications'),
                     ),
                     _ProfileMenuItem(
                       icon: PhosphorIconsRegular.lock,
                       title: 'Security / Password',
                       onTap: () => context.push('/security-settings'),
-                    ),
-                    _ProfileMenuItem(
-                      icon: PhosphorIconsRegular.translate,
-                      title: 'Language',
-                      subtitle: 'English',
-                      onTap: () => context.push('/language-settings'),
                     ),
 
                     const SizedBox(height: AppSpacing.md),
@@ -341,12 +336,14 @@ class _ProfileMenuItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final String? subtitle;
+  final Color? iconColor;
   final VoidCallback onTap;
 
   const _ProfileMenuItem({
     required this.icon,
     required this.title,
     this.subtitle,
+    this.iconColor,
     required this.onTap,
   });
 
@@ -373,7 +370,7 @@ class _ProfileMenuItem extends StatelessWidget {
               child: PhosphorIcon(
                 icon,
                 size: 20,
-                color: AppColors.primary,
+                color: iconColor ?? AppColors.primary,
               ),
             ),
 

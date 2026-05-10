@@ -51,21 +51,21 @@ class AppTheme {
       appBarTheme: const AppBarTheme(
         elevation: 0,
         centerTitle: false,
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: Color(0xFF222B38),
+        foregroundColor: AppColors.textOnPrimary,
         surfaceTintColor: Colors.transparent,
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
         ),
         titleTextStyle: TextStyle(
           fontFamily: AppTextStyles.headingFont,
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
+          color: AppColors.textOnPrimary,
         ),
-        iconTheme: IconThemeData(color: AppColors.textPrimary, size: 24),
+        iconTheme: IconThemeData(color: AppColors.textOnPrimary, size: 24),
       ),
 
       // Card Theme

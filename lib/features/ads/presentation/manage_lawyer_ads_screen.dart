@@ -1,8 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
+import '../../../l10n/app_localizations.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../models/lawyer_ad_model.dart';
@@ -13,9 +15,10 @@ class ManageLawyerAdsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(body: Center(child: Text('Please login to manage ads')));
+      return Scaffold(body: Center(child: Text(loc.pleaseLoginToManageAds)));
     }
 
     final service = LawyerAdService();
@@ -30,8 +33,8 @@ class ManageLawyerAdsScreen extends StatelessWidget {
           icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft),
           onPressed: () => context.pop(),
         ),
-        title: const Text(
-          'Manage Ads',
+        title: Text(
+          loc.manageAds,
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         actions: [
@@ -40,7 +43,7 @@ class ManageLawyerAdsScreen extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: () => context.push('/lawyer-create-ad'),
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('New Ad'),
+              label: Text(loc.newAd),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -63,7 +66,7 @@ class ManageLawyerAdsScreen extends StatelessWidget {
                 children: [
                   const PhosphorIcon(PhosphorIconsRegular.warning, size: 48, color: AppColors.error),
                   const SizedBox(height: 12),
-                  Text('Error loading ads', style: textTheme.titleMedium),
+                  Text(loc.errorLoadingAds, style: textTheme.titleMedium),
                 ],
               ),
             );
@@ -88,10 +91,10 @@ class ManageLawyerAdsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  Text('No Ads Yet', style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                  Text(loc.noAdsYet, style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'Create your first ad to attract clients.',
+                    loc.createYourFirstAdToAttractClients,
                     style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
                     textAlign: TextAlign.center,
                   ),
@@ -99,7 +102,7 @@ class ManageLawyerAdsScreen extends StatelessWidget {
                   FilledButton.icon(
                     onPressed: () => context.push('/lawyer-create-ad'),
                     icon: const Icon(Icons.add),
-                    label: const Text('Create Ad'),
+                    label: Text(loc.createAd),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -110,46 +113,84 @@ class ManageLawyerAdsScreen extends StatelessWidget {
             );
           }
 
-          // Summary stats
-          final activeCount = ads.where((a) => a.isActive).length;
+          final activeAdsCount = ads.where((a) => a.isActive).length;
           final totalBookings = ads.fold<int>(0, (sum, a) => sum + a.bookings);
 
-          return ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            children: [
-              // Stats row
-              Row(
+          return FutureBuilder<int>(
+            future: service.getActiveCaseCount(user.uid),
+            builder: (context, caseSnapshot) {
+              final activeCaseCount = caseSnapshot.data ?? 0;
+
+              return ListView(
+                padding: const EdgeInsets.all(AppSpacing.md),
                 children: [
-                  _StatCard(
-                    label: 'Total Ads',
-                    value: ads.length.toString(),
-                    icon: PhosphorIconsRegular.megaphone,
-                    color: AppColors.primary,
+                  Card(
+                    color: activeCaseCount >= 5 ? AppColors.error.withValues(alpha: 0.08) : AppColors.surface,
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Row(
+                        children: [
+                          const PhosphorIcon(PhosphorIconsRegular.usersThree, color: AppColors.primary),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(loc.activeCasesLimit, style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                Text(loc.activeCasesInUse(activeCaseCount)),
+                                if (activeCaseCount >= 5)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      loc.adsPausedDueToLimit,
+                                      style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          if (activeCaseCount >= 5)
+                            const PhosphorIcon(PhosphorIconsRegular.warning, color: AppColors.error),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  _StatCard(
-                    label: 'Active',
-                    value: activeCount.toString(),
-                    icon: PhosphorIconsRegular.checkCircle,
-                    color: AppColors.success,
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      _StatCard(
+                        label: loc.totalAds,
+                        value: ads.length.toString(),
+                        icon: PhosphorIconsRegular.megaphone,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      _StatCard(
+                        label: loc.active,
+                        value: activeAdsCount.toString(),
+                        icon: PhosphorIconsRegular.checkCircle,
+                        color: AppColors.success,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      _StatCard(
+                        label: loc.bookings,
+                        value: totalBookings.toString(),
+                        icon: PhosphorIconsRegular.shoppingBag,
+                        color: AppColors.info,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  _StatCard(
-                    label: 'Bookings',
-                    value: totalBookings.toString(),
-                    icon: PhosphorIconsRegular.shoppingBag,
-                    color: AppColors.info,
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    loc.yourAds,
+                    style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  ...ads.map((ad) => _AdCard(ad: ad, service: service, activeCaseCount: activeCaseCount)),
                 ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Your Ads',
-                style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              ...ads.map((ad) => _AdCard(ad: ad, service: service)),
-            ],
+              );
+            },
           );
         },
       ),
@@ -203,12 +244,14 @@ class _StatCard extends StatelessWidget {
 class _AdCard extends StatelessWidget {
   final LawyerAdModel ad;
   final LawyerAdService service;
+  final int activeCaseCount;
 
-  const _AdCard({required this.ad, required this.service});
+  const _AdCard({required this.ad, required this.service, required this.activeCaseCount});
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final loc = AppLocalizations.of(context);
     final isActive = ad.isActive;
     final dateFormat = DateFormat('MMM d, yyyy');
 
@@ -278,7 +321,7 @@ class _AdCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                _StatusBadge(isActive: isActive),
+                _StatusBadge(ad: ad),
               ],
             ),
           ),
@@ -304,7 +347,7 @@ class _AdCard extends StatelessWidget {
                             size: 14, color: AppColors.textSecondary),
                         const SizedBox(width: 4),
                         Text(
-                          '${ad.bookings} bookings',
+                          loc.bookingsCount(ad.bookings),
                           style: textTheme.bodySmall?.copyWith(
                             color: AppColors.textSecondary,
                             fontWeight: FontWeight.w500,
@@ -314,7 +357,7 @@ class _AdCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Created ${dateFormat.format(ad.createdAt)}',
+                      loc.createdDate(dateFormat.format(ad.createdAt)),
                       style: textTheme.labelSmall?.copyWith(
                         color: AppColors.textLight,
                         fontSize: 10,
@@ -332,19 +375,29 @@ class _AdCard extends StatelessWidget {
                     if (value == 'edit') {
                       context.push('/lawyer-edit-ad/${ad.id}');
                     } else if (value == 'toggle') {
-                      await service.setAdActive(ad.id, !isActive);
+                      if (!isActive && ad.isPausedDueToActiveCases && activeCaseCount >= 5) {
+                        await _showCaseLimitDialog(context);
+                        return;
+                      }
+                      try {
+                        await service.setAdActiveWithValidation(ad.id, !isActive, ad.lawyerId);
+                      } catch (_) {
+                        if (context.mounted) {
+                          await _showCaseLimitDialog(context);
+                        }
+                      }
                     } else if (value == 'delete') {
                       _showDeleteDialog(context);
                     }
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem(
-                      value: 'edit',
+                      value: 'delete',
                       child: Row(
                         children: [
-                          const PhosphorIcon(PhosphorIconsRegular.pencil, size: 18),
+                          PhosphorIcon(PhosphorIconsRegular.trash, size: 18, color: AppColors.error),
                           const SizedBox(width: 8),
-                          Text('Edit Details', style: textTheme.bodyMedium),
+                          Text(loc.deleteAd, style: const TextStyle(color: AppColors.error)),
                         ],
                       ),
                     ),
@@ -354,18 +407,18 @@ class _AdCard extends StatelessWidget {
                         children: [
                           PhosphorIcon(isActive ? PhosphorIconsRegular.pause : PhosphorIconsRegular.play, size: 18),
                           const SizedBox(width: 8),
-                          Text(isActive ? 'Pause Ad' : 'Activate Ad', style: textTheme.bodyMedium),
+                          Text(isActive ? loc.pauseAd : loc.activateAd, style: textTheme.bodyMedium),
                         ],
                       ),
                     ),
                     const PopupMenuDivider(),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'delete',
                       child: Row(
                         children: [
                           PhosphorIcon(PhosphorIconsRegular.trash, size: 18, color: AppColors.error),
                           const SizedBox(width: 8),
-                          Text('Delete Ad', style: TextStyle(color: AppColors.error)),
+                          Text(loc.deleteAd, style: const TextStyle(color: AppColors.error)),
                         ],
                       ),
                     ),
@@ -392,20 +445,21 @@ class _AdCard extends StatelessWidget {
   }
 
   void _showDeleteDialog(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Ad'),
-        content: Text('Are you sure you want to delete "${ad.title}"? This action cannot be undone.'),
+        title: Text(loc.deleteAd),
+        content: Text(loc.deleteAdConfirm(ad.title)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(loc.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Delete'),
+            child: Text(loc.delete),
           ),
         ],
       ),
@@ -414,20 +468,49 @@ class _AdCard extends StatelessWidget {
       await service.deleteAd(ad.id);
     }
   }
+
+  Future<void> _showCaseLimitDialog(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.cannotReactivateAd),
+        content: Text(loc.cannotReactivateAdMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(loc.dismiss),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _StatusBadge extends StatelessWidget {
-  final bool isActive;
-  const _StatusBadge({required this.isActive});
+  final LawyerAdModel ad;
+  const _StatusBadge({required this.ad});
 
   @override
   Widget build(BuildContext context) {
+    final isCaseLimitPaused = ad.isPausedDueToActiveCases;
+    final isActive = ad.isActive;
+    final backgroundColor = isCaseLimitPaused
+        ? AppColors.error.withValues(alpha: 0.08)
+        : isActive
+            ? AppColors.success.withValues(alpha: 0.08)
+            : AppColors.grey200;
+    final textColor = isCaseLimitPaused
+        ? AppColors.error
+        : isActive
+            ? AppColors.success
+            : AppColors.textSecondary;
+    final label = isCaseLimitPaused ? 'Paused (5 cases)' : isActive ? 'Active' : 'Paused';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isActive
-            ? AppColors.success.withValues(alpha: 0.08)
-            : AppColors.grey200,
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(AppRadius.full),
       ),
       child: Row(
@@ -437,17 +520,17 @@ class _StatusBadge extends StatelessWidget {
             width: 6,
             height: 6,
             decoration: BoxDecoration(
-              color: isActive ? AppColors.success : AppColors.textSecondary,
+              color: textColor,
               shape: BoxShape.circle,
             ),
           ),
           const SizedBox(width: 6),
           Text(
-            isActive ? 'Active' : 'Paused',
+            label,
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.bold,
-              color: isActive ? AppColors.success : AppColors.textSecondary,
+              color: textColor,
             ),
           ),
         ],

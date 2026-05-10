@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../cases/models/case_model.dart';
 import '../../cases/services/case_service.dart';
@@ -30,6 +31,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
   }
 
   void _showFilterModal() {
+    final loc = AppLocalizations.of(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -52,7 +54,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Refine Results',
+                      loc.refineResults,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -73,16 +75,16 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   children: [
                     // Sort By
-                    Text('Sort By',
+                    Text(loc.sortBy,
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: AppSpacing.md),
                     Wrap(
                       spacing: AppSpacing.sm,
                       runSpacing: AppSpacing.sm, // Added vertical spacing
                       children: [
-                        'Newest',
-                        'Budget: High to Low',
-                        'Budget: Low to High'
+                        loc.newest,
+                        loc.budgetHighToLow,
+                        loc.budgetLowToHigh
                       ].map((sort) {
                         final isSelected = _selectedSort == sort;
                         return ChoiceChip(
@@ -117,18 +119,18 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                     const SizedBox(height: AppSpacing.xl),
 
                     // Job Type
-                    Text('Job Type',
+                    Text(loc.jobType,
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: AppSpacing.md),
                     Wrap(
                       spacing: AppSpacing.sm,
                       runSpacing: AppSpacing.sm,
                       children: [
-                        'Corporate',
-                        'Criminal',
-                        'Civil',
-                        'Property',
-                        'Family'
+                        loc.corporate,
+                        loc.criminal,
+                        loc.civil,
+                        loc.property,
+                        loc.family
                       ].map((filter) {
                         final isSelected = _selectedFilters.contains(filter);
                         return FilterChip(
@@ -169,7 +171,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                     const SizedBox(height: AppSpacing.xl),
 
                     // Budget Range
-                    Text('Budget Range (PKR)',
+                    Text(loc.budgetRangePkr,
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: AppSpacing.md),
                     RangeSlider(
@@ -189,9 +191,9 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('0k',
+                        Text(loc.zeroK,
                             style: Theme.of(context).textTheme.bodySmall),
-                        Text('1000k+',
+                        Text(loc.thousandKPlus,
                             style: Theme.of(context).textTheme.bodySmall),
                       ],
                     ),
@@ -216,8 +218,8 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                         borderRadius: BorderRadius.circular(AppRadius.full),
                       ),
                     ),
-                    child: const Text('Show Results',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(loc.showResults,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ),
@@ -231,6 +233,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final loc = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -242,7 +245,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
           }
 
           if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+            return Center(child: Text('${loc.error}: ${snapshot.error}'));
           }
 
           final allCases = snapshot.data ?? [];
@@ -262,19 +265,33 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
 
             // 2. Filters (Category/Job Type)
             if (_selectedFilters.isNotEmpty) {
-              // Assuming filters match categories. Note: JobMockData had categories mapping.
-              // CaseModel has 'category' field. JobOpportunity also has 'category'.
-              // If filter is "Corporate", check if job.category == "Corporate"
-              // The current filters in modal are: Corporate, Criminal, Civil, Property, Family
               if (!_selectedFilters.contains(job.category)) {
                 return false;
               }
             }
 
-            // 3. Budget (Optional enhancement, not strictly enforced in current UI logic)
+            // 3. Budget Range Filter
+            final budgetMin = _budgetRange.start * 1000; // Convert k to actual value
+            final budgetMax = _budgetRange.end * 1000;
+            final jobBudget = job.budgetMax; // Using max budget for comparison
+            if (jobBudget < budgetMin || jobBudget > budgetMax) {
+              return false;
+            }
 
             return true;
           }).toList();
+
+          // Apply Sorting
+          final sortedJobs = [...filteredJobs];
+          if (_selectedSort == loc.newest) {
+            sortedJobs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          } else if (_selectedSort == loc.budgetHighToLow) {
+            sortedJobs.sort((a, b) => b.budgetMax.compareTo(a.budgetMax));
+          } else if (_selectedSort == loc.budgetLowToHigh) {
+            sortedJobs.sort((a, b) => a.budgetMax.compareTo(b.budgetMax));
+          }
+
+          final displayJobs = sortedJobs;
 
           return CustomScrollView(
             slivers: [
@@ -288,7 +305,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                 toolbarHeight: 60,
                 automaticallyImplyLeading: false, // Remove back button
                 title: Text(
-                  'Find Work',
+                  loc.findWork,
                   style: textTheme.headlineSmall?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -332,7 +349,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                                   onChanged: (value) => setState(
                                       () {}), // Trigger rebuild on search
                                   decoration: InputDecoration(
-                                    hintText: 'Search jobs...',
+                                    hintText: loc.searchJobs,
                                     hintStyle: TextStyle(
                                         color: AppColors.textSecondary
                                             .withValues(alpha: 0.6)),
@@ -358,7 +375,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                                         size: 18, color: AppColors.primary),
                                     const SizedBox(width: 4),
                                     Text(
-                                      'Filter',
+                                      loc.filter,
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodyMedium
@@ -380,7 +397,7 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
               ),
 
               // 3. Job List
-              if (filteredJobs.isEmpty)
+              if (displayJobs.isEmpty)
                 SliverFillRemaining(
                   child: Center(
                     child: Column(
@@ -389,8 +406,8 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                         Icon(PhosphorIconsRegular.briefcase,
                             size: 48, color: AppColors.textSecondary),
                         const SizedBox(height: AppSpacing.md),
-                        const Text(
-                          'No jobs found',
+                        Text(
+                          loc.noJobsFound,
                           style: TextStyle(
                               color: AppColors.textSecondary, fontSize: 16),
                         ),
@@ -405,13 +422,13 @@ class _JobBoardScreenState extends State<JobBoardScreen> {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
-                        final job = filteredJobs[index];
+                        final job = displayJobs[index];
                         return Padding(
                           padding: const EdgeInsets.only(bottom: AppSpacing.md),
                           child: JobOpportunityCard(job: job),
                         );
                       },
-                      childCount: filteredJobs.length,
+                      childCount: displayJobs.length,
                     ),
                   ),
                 ),

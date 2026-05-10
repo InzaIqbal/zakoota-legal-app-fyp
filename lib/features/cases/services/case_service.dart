@@ -6,12 +6,15 @@ import '../models/case_model.dart';
 import 'consultation_service.dart';
 import '../../notifications/models/notification_model.dart';
 import '../../notifications/services/notification_service.dart';
+import '../../ads/services/lawyer_ad_service.dart';
+import '../../wallet/services/wallet_service.dart';
 
 class CaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final Uuid _uuid = const Uuid();
   final NotificationService _notificationService = NotificationService();
+  final WalletService _walletService = WalletService();
 
   Future<void> createCase({
     required String clientId,
@@ -24,6 +27,10 @@ class CaseService {
     required String meetingPreference,
     required List<Map<String, dynamic>>
         attachments, // List of {file: File, title: String}
+    double? heldAmount,
+    String? paymentStatus,
+    String? holdOperationId,
+    String? releaseOperationId,
   }) async {
     try {
       final String caseId = _uuid.v4();
@@ -63,6 +70,10 @@ class CaseService {
         status: 'open',
         proposalCount: 0,
         createdAt: DateTime.now(),
+        heldAmount: heldAmount,
+        paymentStatus: paymentStatus,
+        holdOperationId: holdOperationId,
+        releaseOperationId: releaseOperationId,
       );
 
       // 3. Save to Firestore
@@ -259,6 +270,7 @@ class CaseService {
     return _firestore
         .collection('cases')
         .where('status', isEqualTo: 'open')
+        .where('isAdVisible', isEqualTo: true)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
@@ -341,82 +353,45 @@ class CaseService {
       final data = caseDoc.data();
       final clientId = data?['clientId'] as String?;
       final lawyerId = data?['acceptedLawyerId'] as String?;
-      final agreedBudget = (data?['agreedBudget'] as num?)?.toDouble() ?? 0.0;
+      final heldAmount = (data?['heldAmount'] as num?)?.toDouble() ?? 0.0;
+      final holdOperationId = data?['holdOperationId'] as String?;
+      final paymentStatus = data?['paymentStatus'] as String?;
 
-      // If case has agreed budget and both parties exist, transfer payment from client to lawyer
-      if (agreedBudget > 0 && clientId != null && clientId.isNotEmpty && lawyerId != null && lawyerId.isNotEmpty) {
-        final operationId = 'case_completion_${caseId}_${DateTime.now().millisecondsSinceEpoch}';
+      if (heldAmount > 0 && holdOperationId != null && holdOperationId.isNotEmpty && clientId != null && clientId.isNotEmpty && lawyerId != null && lawyerId.isNotEmpty) {
+        final operationId = 'case_completion_release_${caseId}_${DateTime.now().millisecondsSinceEpoch}';
 
-        // Atomic payment: debit client, credit lawyer, log both sides
-        await _firestore.runTransaction((transaction) async {
-          // Check client balance
-          final clientDoc = await transaction.get(_firestore.collection('users').doc(clientId));
-          final clientBalance = (clientDoc.get('walletBalance') as num?)?.toDouble() ?? 0.0;
+        await _walletService.releaseHeldFunds(
+          fromUserId: clientId,
+          toUserId: lawyerId,
+          amount: heldAmount,
+          operationId: operationId,
+          releaseReason: 'case_completion_release',
+          originalHoldOperationId: holdOperationId,
+          metadata: {'caseId': caseId},
+        );
 
-          if (clientBalance < agreedBudget) {
-            throw Exception('Insufficient balance to release payment. Available: PKR ${clientBalance.toStringAsFixed(2)}, Required: PKR ${agreedBudget.toStringAsFixed(2)}');
-          }
-
-          final newClientBalance = clientBalance - agreedBudget;
-          final lawyerDoc = await transaction.get(_firestore.collection('users').doc(lawyerId));
-          final lawyerBalance = (lawyerDoc.get('walletBalance') as num?)?.toDouble() ?? 0.0;
-          final newLawyerBalance = lawyerBalance + agreedBudget;
-
-          // Update both wallets
-          transaction.update(_firestore.collection('users').doc(clientId), {
-            'walletBalance': newClientBalance,
-          });
-
-          transaction.update(_firestore.collection('users').doc(lawyerId), {
-            'walletBalance': newLawyerBalance,
-          });
-
-          // Log transaction for client (debit)
-          transaction.set(
-            _firestore.collection('users').doc(clientId).collection('wallet_transactions').doc(),
-            {
-              'type': 'case_completion_payment',
-              'operationId': operationId,
-              'amount': -agreedBudget,
-              'previousBalance': clientBalance,
-              'newBalance': newClientBalance,
-              'description': 'Case completion payment released to lawyer',
-              'otherParty': lawyerId,
-              'caseId': caseId,
-              'timestamp': FieldValue.serverTimestamp(),
-              'status': 'completed',
-            },
-          );
-
-          // Log transaction for lawyer (credit)
-          transaction.set(
-            _firestore.collection('users').doc(lawyerId).collection('wallet_transactions').doc(),
-            {
-              'type': 'case_completion_payment',
-              'operationId': operationId,
-              'amount': agreedBudget,
-              'previousBalance': lawyerBalance,
-              'newBalance': newLawyerBalance,
-              'description': 'Case completion payment received from client',
-              'otherParty': clientId,
-              'caseId': caseId,
-              'timestamp': FieldValue.serverTimestamp(),
-              'status': 'completed',
-            },
-          );
-
-          // Mark case as closed
-          transaction.update(_firestore.collection('cases').doc(caseId), {
-            'status': 'closed',
-            'completedAt': FieldValue.serverTimestamp(),
-          });
-        });
-      } else {
-        // No payment needed, just close case
         await _firestore.collection('cases').doc(caseId).update({
           'status': 'closed',
+          'paymentStatus': 'released',
+          'releaseOperationId': operationId,
           'completedAt': FieldValue.serverTimestamp(),
         });
+      } else {
+        await _firestore.collection('cases').doc(caseId).update({
+          'status': 'closed',
+          'paymentStatus': paymentStatus ?? 'none',
+          'completedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Check and manage ad status based on case limit
+      if (lawyerId != null && lawyerId.isNotEmpty) {
+        try {
+          final lawyerAdService = LawyerAdService();
+          await lawyerAdService.checkAndManageAdStatus(lawyerId);
+        } catch (e) {
+          print('Error checking ad status: $e');
+        }
       }
 
       // Update associated consultations caseStatus
@@ -433,8 +408,8 @@ class CaseService {
               actorId: lawyerId,
               type: NotificationType.caseClosed,
               title: 'Case closed',
-              message: agreedBudget > 0
-                  ? 'Your case has been closed and payment of PKR ${agreedBudget.toStringAsFixed(2)} has been transferred to the lawyer.'
+              message: heldAmount > 0
+                  ? 'Your case has been closed and payment of PKR ${heldAmount.toStringAsFixed(2)} has been released to the lawyer.'
                   : 'Your case has been marked as closed.',
               referenceType: 'case',
               referenceId: caseId,
@@ -453,8 +428,8 @@ class CaseService {
               actorId: clientId,
               type: NotificationType.caseClosed,
               title: 'Case closed and payment received',
-              message: agreedBudget > 0
-                  ? 'Your case has been closed and you have received payment of PKR ${agreedBudget.toStringAsFixed(2)} from the client.'
+              message: heldAmount > 0
+                  ? 'Your case has been closed and you have received payment of PKR ${heldAmount.toStringAsFixed(2)} from the client.'
                   : 'One of your assigned cases has been closed.',
               referenceType: 'case',
               referenceId: caseId,

@@ -12,8 +12,11 @@ class CaseInvoiceModel {
   final String payeeId;
   final DateTime? dueDate;
   final DateTime? paidAt;
+  final DateTime? heldAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? holdOperationId;
+  final String? releaseOperationId;
 
   const CaseInvoiceModel({
     required this.id,
@@ -27,8 +30,11 @@ class CaseInvoiceModel {
     required this.payeeId,
     required this.dueDate,
     required this.paidAt,
+    this.heldAt,
     required this.createdAt,
     required this.updatedAt,
+    this.holdOperationId,
+    this.releaseOperationId,
   });
 
   Map<String, dynamic> toMap() {
@@ -43,8 +49,11 @@ class CaseInvoiceModel {
       'payeeId': payeeId,
       'dueDate': dueDate != null ? Timestamp.fromDate(dueDate!) : null,
       'paidAt': paidAt != null ? Timestamp.fromDate(paidAt!) : null,
+      'heldAt': heldAt != null ? Timestamp.fromDate(heldAt!) : null,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'holdOperationId': holdOperationId,
+      'releaseOperationId': releaseOperationId,
     };
   }
 
@@ -61,8 +70,11 @@ class CaseInvoiceModel {
       payeeId: map['payeeId'] ?? '',
       dueDate: (map['dueDate'] as Timestamp?)?.toDate(),
       paidAt: (map['paidAt'] as Timestamp?)?.toDate(),
+      heldAt: (map['heldAt'] as Timestamp?)?.toDate(),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      holdOperationId: map['holdOperationId'] as String?,
+      releaseOperationId: map['releaseOperationId'] as String?,
     );
   }
 }

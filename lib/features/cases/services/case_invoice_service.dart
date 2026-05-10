@@ -1,10 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/case_invoice_model.dart';
-import '../../wallet/models/wallet_transaction_model.dart';
+import '../../wallet/services/wallet_service.dart';
 
 class CaseInvoiceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final WalletService _walletService = WalletService();
 
   CollectionReference<Map<String, dynamic>> _invoicesRef(String caseId) {
     return _firestore.collection('cases').doc(caseId).collection('invoices');
@@ -70,100 +71,90 @@ class CaseInvoiceService {
     required String invoiceId,
     required String currentUserId,
   }) async {
-    await _firestore.runTransaction((tx) async {
-      final invoiceRef = _invoicesRef(caseId).doc(invoiceId);
-      final invoiceDoc = await tx.get(invoiceRef);
-      if (!invoiceDoc.exists || invoiceDoc.data() == null) {
-        throw Exception('Invoice not found');
-      }
+    final invoiceRef = _invoicesRef(caseId).doc(invoiceId);
+    final invoiceDoc = await invoiceRef.get();
+    if (!invoiceDoc.exists || invoiceDoc.data() == null) {
+      throw Exception('Invoice not found');
+    }
 
-      final invoice = CaseInvoiceModel.fromMap(invoiceDoc.data()!, invoiceDoc.id);
-      if (invoice.status == 'paid') {
-        return;
-      }
+    final invoice = CaseInvoiceModel.fromMap(invoiceDoc.data()!, invoiceDoc.id);
+    if (invoice.status == 'paid' || invoice.status == 'held') {
+      return;
+    }
 
-      if (invoice.payerId != currentUserId) {
-        throw Exception('Only the invoice payer can complete this payment');
-      }
+    if (invoice.payerId != currentUserId) {
+      throw Exception('Only the invoice payer can complete this payment');
+    }
 
-      final payerRef = _firestore.collection('users').doc(invoice.payerId);
-      final payeeRef = _firestore.collection('users').doc(invoice.payeeId);
-      final payerDoc = await tx.get(payerRef);
-      final payeeDoc = await tx.get(payeeRef);
-      if (!payerDoc.exists) throw Exception('Payer profile not found');
-      if (!payeeDoc.exists) throw Exception('Payee profile not found');
+    final now = DateTime.now();
+    final operationId = 'invoice_hold_${invoice.id}';
 
-      final payerBalance = (payerDoc.data()?['walletBalance'] ?? 0).toDouble();
-      if (payerBalance < invoice.amount) {
-        throw Exception('Insufficient wallet balance');
-      }
+    await _walletService.holdFunds(
+      userId: invoice.payerId,
+      amount: invoice.amount,
+      operationId: operationId,
+      reason: 'invoice_payment_hold',
+      referenceType: 'case_invoice',
+      referenceId: invoice.id,
+      metadata: {
+        'caseId': caseId,
+        'title': invoice.title,
+      },
+    );
 
-      final payeeBalance = (payeeDoc.data()?['walletBalance'] ?? 0).toDouble();
-      final now = DateTime.now();
-      final operationId = 'invoice_payment_${invoice.id}';
+    await invoiceRef.update({
+      'status': 'held',
+      'heldAt': Timestamp.fromDate(now),
+      'updatedAt': Timestamp.fromDate(now),
+      'holdOperationId': operationId,
+    });
+  }
 
-      tx.update(payerRef, {
-        'walletBalance': payerBalance - invoice.amount,
-        'lastActivity': Timestamp.fromDate(now),
-      });
+  Future<void> releaseInvoicePayment({
+    required String caseId,
+    required String invoiceId,
+    required String currentUserId,
+  }) async {
+    final invoiceRef = _invoicesRef(caseId).doc(invoiceId);
+    final invoiceDoc = await invoiceRef.get();
+    if (!invoiceDoc.exists || invoiceDoc.data() == null) {
+      throw Exception('Invoice not found');
+    }
 
-      tx.update(payeeRef, {
-        'walletBalance': payeeBalance + invoice.amount,
-        'lastActivity': Timestamp.fromDate(now),
-      });
+    final invoice = CaseInvoiceModel.fromMap(invoiceDoc.data()!, invoiceDoc.id);
+    if (invoice.status == 'paid') {
+      return;
+    }
 
-      tx.update(invoiceRef, {
-        'status': 'paid',
-        'paidAt': Timestamp.fromDate(now),
-        'updatedAt': Timestamp.fromDate(now),
-      });
+    if (invoice.payerId != currentUserId) {
+      throw Exception('Only the invoice payer can release this payment');
+    }
 
-      final payerTxRef = payerRef.collection('wallet_transactions').doc();
-      final payeeTxRef = payeeRef.collection('wallet_transactions').doc();
+    if (invoice.holdOperationId == null || invoice.holdOperationId!.isEmpty) {
+      throw Exception('Invoice hold not found');
+    }
 
-      tx.set(
-        payerTxRef,
-        WalletTransactionModel(
-          id: payerTxRef.id,
-          operationId: operationId,
-          userId: invoice.payerId,
-          type: WalletTxType.debit,
-          reason: 'invoice_payment',
-          amount: invoice.amount,
-          currency: invoice.currency,
-          status: 'completed',
-          counterpartyUserId: invoice.payeeId,
-          referenceType: 'case_invoice',
-          referenceId: invoice.id,
-          metadata: {
-            'caseId': caseId,
-            'title': invoice.title,
-          },
-          createdAt: now,
-        ).toMap(),
-      );
+    final operationId = 'invoice_release_${invoice.id}';
+    final now = DateTime.now();
 
-      tx.set(
-        payeeTxRef,
-        WalletTransactionModel(
-          id: payeeTxRef.id,
-          operationId: operationId,
-          userId: invoice.payeeId,
-          type: WalletTxType.credit,
-          reason: 'invoice_payment_received',
-          amount: invoice.amount,
-          currency: invoice.currency,
-          status: 'completed',
-          counterpartyUserId: invoice.payerId,
-          referenceType: 'case_invoice',
-          referenceId: invoice.id,
-          metadata: {
-            'caseId': caseId,
-            'title': invoice.title,
-          },
-          createdAt: now,
-        ).toMap(),
-      );
+    await _walletService.releaseHeldFunds(
+      fromUserId: invoice.payerId,
+      toUserId: invoice.payeeId,
+      amount: invoice.amount,
+      operationId: operationId,
+      releaseReason: 'invoice_payment_release',
+      originalHoldOperationId: invoice.holdOperationId!,
+      metadata: {
+        'caseId': caseId,
+        'title': invoice.title,
+      },
+    );
+
+    await invoiceRef.update({
+      'status': 'paid',
+      'paidAt': Timestamp.fromDate(now),
+      'updatedAt': Timestamp.fromDate(now),
+      'releaseOperationId': operationId,
     });
   }
 }

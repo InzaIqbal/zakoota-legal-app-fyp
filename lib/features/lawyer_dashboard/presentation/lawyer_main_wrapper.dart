@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
-import '../../notifications/services/notification_service.dart';
+import '../../chat/services/chat_service.dart';
 
 /// Lawyer main wrapper with bottom navigation
 class LawyerMainWrapper extends StatefulWidget {
@@ -16,7 +16,7 @@ class LawyerMainWrapper extends StatefulWidget {
 }
 
 class _LawyerMainWrapperState extends State<LawyerMainWrapper> {
-  final NotificationService _notificationService = NotificationService();
+  final ChatService _chatService = ChatService();
   final AuthService _authService = AuthService();
 
   void _onTap(int index) {
@@ -92,7 +92,7 @@ class _LawyerMainWrapperState extends State<LawyerMainWrapper> {
     }
 
     return StreamBuilder<int>(
-      stream: _notificationService.streamUnreadCount(user.uid),
+      stream: _chatService.streamTotalUnreadCount(user.uid),
       builder: (context, snapshot) {
         final unreadCount = snapshot.data ?? 0;
         return Stack(

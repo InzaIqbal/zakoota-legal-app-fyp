@@ -65,7 +65,7 @@ class _BookLawyerAdScreenState extends State<BookLawyerAdScreen> {
 
     setState(() => _isPaying = true);
     try {
-      final bookingId = await _bookingService.chargeAndCreateBooking(
+      final bookingId = await _bookingService.holdAdBookingPayment(
         adId: ad.id,
         lawyerId: ad.lawyerId,
         clientId: user.uid,
@@ -78,8 +78,8 @@ class _BookLawyerAdScreenState extends State<BookLawyerAdScreen> {
           userId: user.uid,
           actorId: ad.lawyerId,
           type: NotificationType.paymentSuccess,
-          title: 'Ad booked successfully',
-          message: 'Payment received for ${ad.title}. Continue setup now.',
+          title: 'Ad booked - payment held',
+          message: 'Payment held for ${ad.title}. Complete setup to proceed.',
           referenceType: 'ad_booking',
           referenceId: bookingId,
           payload: {'bookingId': bookingId, 'adId': ad.id},
@@ -90,8 +90,8 @@ class _BookLawyerAdScreenState extends State<BookLawyerAdScreen> {
           userId: ad.lawyerId,
           actorId: user.uid,
           type: NotificationType.paymentSuccess,
-          title: 'New ad booking paid',
-          message: 'A client booked and paid for ${ad.title}.',
+          title: 'New ad booking awaiting setup',
+          message: 'A client booked ${ad.title}. Payment is held in escrow.',
           referenceType: 'ad_booking',
           referenceId: bookingId,
           payload: {'bookingId': bookingId, 'adId': ad.id},
@@ -104,8 +104,8 @@ class _BookLawyerAdScreenState extends State<BookLawyerAdScreen> {
           id: '',
           userId: user.uid,
           type: UpdateType.paymentAccepted,
-          title: 'Ad booking paid',
-          message: 'Payment done for ${ad.title}. Setup is pending.',
+          title: 'Ad booking held',
+          message: 'Payment held for ${ad.title}. Complete setup to confirm.',
           relatedId: bookingId,
           timestamp: DateTime.now(),
         ),
@@ -116,8 +116,8 @@ class _BookLawyerAdScreenState extends State<BookLawyerAdScreen> {
           id: '',
           userId: ad.lawyerId,
           type: UpdateType.paymentAccepted,
-          title: 'New paid booking',
-          message: '${ad.title} has a new paid client booking.',
+          title: 'New booking awaiting setup',
+          message: '${ad.title} has a new booking with payment held in escrow.',
           relatedId: bookingId,
           timestamp: DateTime.now(),
         ),

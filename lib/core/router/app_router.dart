@@ -46,6 +46,7 @@ import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/lawyers/data/lawyer_mock_data.dart';
 import '../../features/lawyer_dashboard/presentation/lawyer_main_wrapper.dart';
 import '../../features/lawyer_dashboard/presentation/lawyer_home_screen.dart';
+import '../../features/lawyer_dashboard/presentation/lawyer_analytics_screen.dart';
 import '../../features/lawyer_cases/presentation/lawyer_cases_screen.dart';
 import '../../features/jobs/presentation/job_board_screen.dart';
 import '../../features/jobs/presentation/job_details_screen.dart';
@@ -59,6 +60,7 @@ import '../../features/ads/presentation/create_lawyer_ad_screen.dart';
 import '../../features/ads/presentation/manage_lawyer_ads_screen.dart';
 import '../../features/ads/presentation/book_lawyer_ad_screen.dart';
 import '../../features/ads/presentation/setup_workspace_screen.dart';
+import '../../features/lawyer_dashboard/presentation/lawyer_availability_settings_screen.dart';
 
 import '../../features/profile/presentation/saved_lawyers_screen.dart';
 import '../../features/profile/presentation/security_settings_screen.dart';
@@ -621,6 +623,11 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const ManageLawyerAdsScreen(),
     ),
     GoRoute(
+      path: '/lawyer-availability-settings',
+      name: 'lawyer-availability-settings',
+      builder: (context, state) => const LawyerAvailabilitySettingsScreen(),
+    ),
+    GoRoute(
       path: '/book-lawyer-ad/:adId',
       name: 'book-lawyer-ad',
       builder: (context, state) {
@@ -780,6 +787,13 @@ final GoRouter appRouter = GoRouter(
           ],
         ),
       ],
+    ),
+
+    // Lawyer Analytics (outside shell - no bottom bar)
+    GoRoute(
+      path: '/lawyer-dashboard/lawyer-analytics',
+      name: 'lawyer-analytics',
+      builder: (context, state) => const LawyerAnalyticsScreen(),
     ),
 
     // Client Main Shell with Bottom Navigation

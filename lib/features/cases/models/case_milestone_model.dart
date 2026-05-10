@@ -11,6 +11,8 @@ class CaseMilestoneModel {
   final String createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? holdOperationId;
+  final String? releaseOperationId;
 
   const CaseMilestoneModel({
     required this.id,
@@ -23,6 +25,8 @@ class CaseMilestoneModel {
     required this.createdBy,
     required this.createdAt,
     required this.updatedAt,
+    this.holdOperationId,
+    this.releaseOperationId,
   });
 
   Map<String, dynamic> toMap() {
@@ -36,6 +40,8 @@ class CaseMilestoneModel {
       'createdBy': createdBy,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'holdOperationId': holdOperationId,
+      'releaseOperationId': releaseOperationId,
     };
   }
 
@@ -51,6 +57,8 @@ class CaseMilestoneModel {
       createdBy: map['createdBy'] ?? '',
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      holdOperationId: map['holdOperationId'] as String?,
+      releaseOperationId: map['releaseOperationId'] as String?,
     );
   }
 }

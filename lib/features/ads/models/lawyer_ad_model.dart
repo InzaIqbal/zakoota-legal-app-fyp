@@ -15,6 +15,8 @@ class LawyerAdModel {
   final bool isActive;
   final int views;
   final int bookings;
+  final String? pausedReason; // 'case_limit_reached' or null if not paused
+  final DateTime? pausedAt; // When the ad was paused
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -33,6 +35,8 @@ class LawyerAdModel {
     required this.isActive,
     required this.views,
     required this.bookings,
+    this.pausedReason,
+    this.pausedAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -52,6 +56,8 @@ class LawyerAdModel {
       'isActive': isActive,
       'views': views,
       'bookings': bookings,
+      'pausedReason': pausedReason,
+      'pausedAt': pausedAt != null ? Timestamp.fromDate(pausedAt!) : null,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -74,6 +80,8 @@ class LawyerAdModel {
       isActive: map['isActive'] ?? true,
       views: (map['views'] ?? 0).toInt(),
       bookings: (map['bookings'] ?? 0).toInt(),
+      pausedReason: map['pausedReason'],
+      pausedAt: (map['pausedAt'] as Timestamp?)?.toDate(),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -94,6 +102,8 @@ class LawyerAdModel {
     bool? isActive,
     int? views,
     int? bookings,
+    String? pausedReason,
+    DateTime? pausedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -112,8 +122,14 @@ class LawyerAdModel {
       isActive: isActive ?? this.isActive,
       views: views ?? this.views,
       bookings: bookings ?? this.bookings,
+      pausedReason: pausedReason ?? this.pausedReason,
+      pausedAt: pausedAt ?? this.pausedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  /// Check if ad is paused due to case limit
+  bool get isPausedDueToActiveCases =>
+      pausedReason == 'case_limit_reached' && pausedAt != null;
 }

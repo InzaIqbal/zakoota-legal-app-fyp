@@ -7,7 +7,7 @@ class ZingAIConfig {
   /// Example default points to the existing Zakoota backend.
   static const String baseUrl = String.fromEnvironment(
     'ZING_API_BASE_URL',
-    defaultValue: 'https://zakoota-backend-production.vercel.app',
+    defaultValue: 'https://zing-fix-final-new-1.onrender.com',
   );
 
   /// If your Zing backend requires an API key, pass it via --dart-define.

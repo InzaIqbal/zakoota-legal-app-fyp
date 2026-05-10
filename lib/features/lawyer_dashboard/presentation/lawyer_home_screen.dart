@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
 import '../data/lawyer_dashboard_mock_data.dart';
@@ -23,6 +24,7 @@ class LawyerHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final loc = AppLocalizations.of(context);
     final caseService = CaseService();
     final notificationService = NotificationService();
     final lawyerAdService = LawyerAdService();
@@ -117,10 +119,9 @@ class LawyerHomeScreen extends StatelessWidget {
                 title: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Welcome back,',
-                      style:
-                          TextStyle(fontSize: 12, color: AppColors.textLight),
+                    Text(
+                      loc.welcomeBackComma,
+                      style: TextStyle(fontSize: 12, color: AppColors.textLight),
                     ),
                     Text(
                       fullName,
@@ -132,6 +133,14 @@ class LawyerHomeScreen extends StatelessWidget {
                   ],
                 ),
                 actions: [
+                  IconButton(
+                    onPressed: () => context.push('/lawyer-availability-settings'),
+                    icon: const PhosphorIcon(
+                      PhosphorIconsRegular.clock,
+                      color: Colors.white,
+                    ),
+                    tooltip: loc.availabilitySettings,
+                  ),
                   Builder(
                     builder: (context) {
                       final currentUser = AuthService().currentUser;
@@ -153,60 +162,50 @@ class LawyerHomeScreen extends StatelessWidget {
                       }
 
                       return StreamBuilder<int>(
-                        stream: notificationService.streamUnreadCount(
-                          currentUser.uid,
-                        ),
+                        stream: notificationService.streamUnreadCount(currentUser.uid),
                         builder: (context, unreadSnapshot) {
-                      final unreadCount = unreadSnapshot.data ?? 0;
-                      return Container(
-                        margin: const EdgeInsets.only(right: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Stack(
-                          children: [
-                            IconButton(
-                              onPressed: () => context.push('/notifications'),
-                              icon: PhosphorIcon(
-                                PhosphorIconsRegular.bell,
-                                color: AppColors.textOnPrimary,
-                              ),
+                          final unreadCount = unreadSnapshot.data ?? 0;
+                          return Container(
+                            margin: const EdgeInsets.only(right: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            if (unreadCount > 0)
-                              Positioned(
-                                right: 4,
-                                top: 4,
-                                child: Container(
-                                  constraints: const BoxConstraints(
-                                    minWidth: 16,
-                                    minHeight: 16,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 1,
-                                  ),
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.error,
-                                    borderRadius:
-                                        BorderRadius.all(Radius.circular(10)),
-                                  ),
-                                  child: Text(
-                                    unreadCount > 99
-                                        ? '99+'
-                                        : unreadCount.toString(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                    textAlign: TextAlign.center,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                IconButton(
+                                  onPressed: () => context.push('/notifications'),
+                                  icon: PhosphorIcon(
+                                    PhosphorIconsRegular.bell,
+                                    color: AppColors.textOnPrimary,
                                   ),
                                 ),
-                              ),
-                          ],
-                        ),
-                      );
+                                if (unreadCount > 0)
+                                  Positioned(
+                                    right: 6,
+                                    top: 6,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                      decoration: const BoxDecoration(
+                                        color: AppColors.error,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                                      child: Text(
+                                        unreadCount > 99 ? '99+' : '$unreadCount',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
                         },
                       );
                     },
@@ -255,7 +254,7 @@ class LawyerHomeScreen extends StatelessWidget {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'Wallet Balance',
+                                            loc.walletBalance,
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .bodySmall
@@ -337,7 +336,7 @@ class LawyerHomeScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Quick Actions',
+                        loc.quickActions,
                         style: textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -348,27 +347,28 @@ class LawyerHomeScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           _QuickAction(
-                            label: 'Post Ad',
+                            label: loc.postAd,
                             icon: PhosphorIconsRegular.megaphone,
                             color: AppColors.info,
                             onTap: () => context.push('/lawyer-create-ad'),
                           ),
                           _QuickAction(
-                            label: 'Withdraw',
+                            label: loc.withdraw,
                             icon: PhosphorIconsRegular.bank,
                             color: AppColors.success,
                             onTap: () => context.push('/withdraw'),
                           ),
                           _QuickAction(
-                            label: 'Calendar',
+                            label: loc.calendar,
                             icon: PhosphorIconsRegular.calendar,
                             color: AppColors.warning,
                             onTap: () => context.push('/calendar'),
                           ),
                           _QuickAction(
-                            label: 'Analytics',
+                            label: loc.analytics,
                             icon: PhosphorIconsRegular.chartLine,
                             color: AppColors.primary,
+                            onTap: () => context.push('/lawyer-dashboard/lawyer-analytics'),
                           ),
                         ],
                       ),
@@ -389,7 +389,7 @@ class LawyerHomeScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'My Active Ads',
+                            loc.myActiveAds,
                             style: textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
@@ -397,7 +397,7 @@ class LawyerHomeScreen extends StatelessWidget {
                           ),
                           TextButton(
                             onPressed: () => context.push('/lawyer-manage-ads'),
-                            child: const Text('View All'),
+                            child: Text(loc.viewAll),
                           ),
                         ],
                       ),
@@ -442,14 +442,14 @@ class LawyerHomeScreen extends StatelessWidget {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'No active ads yet',
+                                        loc.noActiveAdsYet,
                                         style: textTheme.titleSmall?.copyWith(
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                       const SizedBox(height: 6),
-                                      const Text(
-                                        'Create your first ad from Quick Actions to appear in client search.',
+                                      Text(
+                                        loc.createFirstAdHint,
                                         style: TextStyle(color: AppColors.textSecondary),
                                       ),
                                     ],
@@ -504,7 +504,7 @@ class LawyerHomeScreen extends StatelessWidget {
                           ),
                           TextButton(
                             onPressed: () => context.go('/lawyer-job-board'),
-                            child: const Text('Explore'),
+                            child: Text(loc.explore),
                           ),
                         ],
                       ),
@@ -523,12 +523,12 @@ class LawyerHomeScreen extends StatelessWidget {
                             .map((c) => JobOpportunity.fromCaseModel(c))
                             .toList();
 
-                          if (jobs.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                            if (jobs.isEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
                               child: Center(
-                                child: Text('No job matches found right now.',
-                                  style: TextStyle(color: AppColors.textSecondary),
+                                child: Text(loc.noJobMatchesFound,
+                                  style: const TextStyle(color: AppColors.textSecondary),
                                 ),
                               ),
                             );
@@ -561,7 +561,7 @@ class LawyerHomeScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Today's Agenda",
+                        loc.todaysAgenda,
                         style: textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -600,10 +600,16 @@ class LawyerHomeScreen extends StatelessWidget {
                                       BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
                                     ],
                                   ),
-                                  child: const Center(
+                                  child: Center(
                                     child: Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: Text("Your agenda is clear for today.", style: TextStyle(color: AppColors.textSecondary)),
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Column(
+                                        children: [
+                                          Text(loc.allCaughtUp, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                          const SizedBox(height: 6),
+                                          Text(loc.noUrgentEventsToday, style: const TextStyle(color: AppColors.textSecondary)),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 );

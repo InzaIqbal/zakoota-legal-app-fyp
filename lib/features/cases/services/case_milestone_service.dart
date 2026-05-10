@@ -57,4 +57,28 @@ class CaseMilestoneService {
       'updatedAt': Timestamp.fromDate(DateTime.now()),
     });
   }
+
+  Future<void> markAsHeld({
+    required String caseId,
+    required String milestoneId,
+    required String holdOperationId,
+  }) async {
+    await _milestonesRef(caseId).doc(milestoneId).update({
+      'status': 'held',
+      'holdOperationId': holdOperationId,
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  Future<void> markAsReleased({
+    required String caseId,
+    required String milestoneId,
+    required String releaseOperationId,
+  }) async {
+    await _milestonesRef(caseId).doc(milestoneId).update({
+      'status': 'paid',
+      'releaseOperationId': releaseOperationId,
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
 }

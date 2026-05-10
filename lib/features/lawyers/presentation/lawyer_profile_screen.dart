@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
 import '../../chat/services/chat_service.dart';
@@ -39,7 +40,7 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
   Future<void> _fetchLawyer() async {
     try {
       final lawyer = await _lawyerService.getLawyerById(widget.lawyerId);
-      
+
       LawyerProfile? completeLawyer = lawyer;
       if (lawyer != null) {
         // Fetch accurate reviews and rating dynamically
@@ -91,25 +92,42 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     if (_isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     }
 
     if (_error != null || _lawyer == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text(loc.profileTitle, style: const TextStyle(color: AppColors.primary)),
+          backgroundColor: AppColors.surface,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: AppColors.primary),
+        ),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(_error ?? 'Lawyer not found',
-                  style: const TextStyle(fontSize: 16)),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const PhosphorIcon(PhosphorIconsRegular.warningCircle, color: AppColors.error, size: 48),
+              ),
               const SizedBox(height: 16),
-              ElevatedButton(
+              Text(_error ?? loc.lawyerNotFound, style: const TextStyle(fontSize: 16, color: AppColors.textPrimary)),
+              const SizedBox(height: 16),
+              FilledButton(
                 onPressed: _fetchLawyer,
-                child: const Text('Retry'),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                child: Text(loc.retry),
               ),
             ],
           ),
@@ -118,10 +136,8 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
     }
 
     final lawyer = _lawyer!;
-
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final colorScheme = theme.colorScheme;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -129,69 +145,100 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
         children: [
           CustomScrollView(
             slivers: [
-              // A. Large SliverAppBar with Photo
+              // A. Clean Solid Navy Header
               SliverAppBar(
-                expandedHeight: 300,
+                expandedHeight: 320,
                 pinned: true,
                 backgroundColor: AppColors.primary,
-                leading: IconButton(
-                  icon: const PhosphorIcon(
-                    PhosphorIconsRegular.arrowLeft,
-                    color: Colors.white,
+                elevation: 0,
+                leading: Container(
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
                   ),
-                  onPressed: () => context.pop(),
+                  child: IconButton(
+                    icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft, color: Colors.white, size: 20),
+                    onPressed: () => context.pop(),
+                  ),
                 ),
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // Navy Background
                       Container(color: AppColors.primary),
-
-                      // Lawyer Photo & Info
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: 80,
-                          left: AppSpacing.lg,
-                          right: AppSpacing.lg,
+                      // Subtle decorative element
+                      Positioned(
+                        right: -50,
+                        top: -50,
+                        child: CircleAvatar(
+                          radius: 100,
+                          backgroundColor: Colors.white.withValues(alpha: 0.03),
                         ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 90, left: AppSpacing.lg, right: AppSpacing.lg),
                         child: Column(
                           children: [
-                            // Photo
-                            UserAvatar(
-                              uid: lawyer.id,
-                              radius: 50,
-                              fallbackName: lawyer.name,
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-
-                            // Name
-                            Text(
-                              lawyer.name,
-                              style: textTheme.headlineSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-
-                            // Verified Badge
-                            if (lawyer.isVerified)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const PhosphorIcon(
-                                    PhosphorIconsFill.seal,
-                                    size: 16,
-                                    color: AppColors.secondary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Verified Lawyer',
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: AppColors.secondary,
-                                    ),
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: AppColors.secondary, width: 3),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.secondary.withValues(alpha: 0.2),
+                                    blurRadius: 15,
+                                    spreadRadius: 2,
                                   ),
                                 ],
+                              ),
+                              child: UserAvatar(
+                                uid: lawyer.id,
+                                radius: 55,
+                                fallbackName: lawyer.name,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Text(
+                              lawyer.name,
+                              style: textTheme.headlineMedium?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              lawyer.professionalHeading,
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            if (lawyer.isVerified)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.secondary.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(AppRadius.full),
+                                  border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const PhosphorIcon(PhosphorIconsFill.sealCheck, size: 16, color: AppColors.secondary),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      loc.verifiedLawyer.toUpperCase(),
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: AppColors.secondary,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                           ],
                         ),
@@ -201,36 +248,21 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
                 ),
               ),
 
-              // B. Quick Stats Cards
+              // B. Quick Stats Cards (Elevated slightly over background)
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _StatCard(
-                          icon: PhosphorIconsRegular.briefcase,
-                          value: '${lawyer.experience}+',
-                          label: 'Years Exp',
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: _StatCard(
-                          icon: PhosphorIconsRegular.trophy,
-                          value: '${lawyer.casesWon}',
-                          label: 'Cases Won',
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: _StatCard(
-                          icon: PhosphorIconsRegular.star,
-                          value: lawyer.ratingDouble.toStringAsFixed(1),
-                          label: 'Rating',
-                        ),
-                      ),
-                    ],
+                child: Transform.translate(
+                  offset: const Offset(0, -20),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                    child: Row(
+                      children: [
+                        Expanded(child: _StatCard(icon: PhosphorIconsRegular.briefcase, value: '${lawyer.experience}+', label: loc.yearsExperience)),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(child: _StatCard(icon: PhosphorIconsRegular.trophy, value: '${lawyer.casesWon}', label: loc.casesWon)),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(child: _StatCard(icon: PhosphorIconsFill.star, value: lawyer.ratingDouble.toStringAsFixed(1), label: loc.ratingLabel)),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -238,30 +270,20 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
               // C. About Me Section
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'About Me',
-                        style: textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.primary,
-                        ),
-                      ),
+                      _SectionTitle(title: loc.aboutMe),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
-                        lawyer.aboutMe,
-                        style: textTheme.bodyMedium?.copyWith(
+                        lawyer.bio ?? 'No bio available',
+                        style: textTheme.bodyLarge?.copyWith(
                           color: AppColors.textSecondary,
                           height: 1.6,
                         ),
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.xl),
                     ],
                   ),
                 ),
@@ -270,39 +292,37 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
               // D. Specializations
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Specializations',
-                        style: textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.primary,
-                        ),
-                      ),
+                      _SectionTitle(title: loc.specializationsLabel),
                       const SizedBox(height: AppSpacing.sm),
                       Wrap(
-                        spacing: AppSpacing.sm,
-                        runSpacing: AppSpacing.sm,
+                        spacing: 8,
+                        runSpacing: 10,
                         children: lawyer.specializations.map((spec) {
-                          return Chip(
-                            label: Text(spec),
-                            backgroundColor:
-                                AppColors.secondary.withValues(alpha: 0.1),
-                            labelStyle: textTheme.labelMedium?.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(AppRadius.full),
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+                              boxShadow: [
+                                BoxShadow(color: AppColors.primary.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2)),
+                              ],
                             ),
-                            side: const BorderSide(
-                              color: AppColors.secondary,
+                            child: Text(
+                              spec,
+                              style: textTheme.labelMedium?.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           );
                         }).toList(),
                       ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.xl),
                     ],
                   ),
                 ),
@@ -311,65 +331,62 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
               // E. Education & Credentials
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Education & Credentials',
-                        style: textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.primary,
+                      _SectionTitle(title: loc.educationAndCredentials),
+                      const SizedBox(height: AppSpacing.md),
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
+                          border: Border.all(color: AppColors.grey200),
+                        ),
+                        child: Column(
+                          children: [
+                            ...lawyer.education.map((edu) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12.0),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), shape: BoxShape.circle),
+                                      child: const PhosphorIcon(PhosphorIconsRegular.graduationCap, size: 18, color: AppColors.secondary),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 6.0),
+                                        child: Text(edu, style: textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                            const Divider(height: 16),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.05), shape: BoxShape.circle),
+                                  child: const PhosphorIcon(PhosphorIconsRegular.scales, size: 18, color: AppColors.primary),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text('Bar License: ${lawyer.barLicenseNo}', style: textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      ...lawyer.education.map((edu) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              PhosphorIcon(
-                                PhosphorIconsRegular.graduationCap,
-                                size: 18,
-                                color: colorScheme.secondary,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  edu,
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                      const SizedBox(height: AppSpacing.xs),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          PhosphorIcon(
-                            PhosphorIconsRegular.scales,
-                            size: 18,
-                            color: colorScheme.secondary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              lawyer.barLicenseNo,
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.xl),
                     ],
                   ),
                 ),
@@ -378,27 +395,18 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
               // F. Client Reviews
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
+                          _SectionTitle(title: loc.clientReviews),
                           Text(
-                            'Client Reviews',
-                            style: textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                          Text(
-                            '${lawyer.reviewsCount} reviews',
-                            style: textTheme.bodySmall?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
+                            loc.reviewsCount(lawyer.reviewsCount),
+                            style: textTheme.labelLarge?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -414,15 +422,14 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
                   (context, index) {
                     final review = lawyer.reviews[index];
                     return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.sm,
-                      ),
+                      padding: const EdgeInsets.only(left: AppSpacing.lg, right: AppSpacing.lg, bottom: AppSpacing.md),
                       child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
+                        padding: const EdgeInsets.all(AppSpacing.lg),
                         decoration: BoxDecoration(
                           color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
+                          border: Border.all(color: AppColors.grey200),
+                          boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -430,60 +437,41 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
                             Row(
                               children: [
                                 CircleAvatar(
-                                  radius: 16,
-                                  backgroundColor: colorScheme.primary,
+                                  radius: 20,
+                                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                                   child: Text(
-                                    review.clientName[0],
-                                    style: textTheme.labelMedium?.copyWith(
-                                      color: Colors.white,
-                                    ),
+                                    review.clientName[0].toUpperCase(),
+                                    style: textTheme.titleMedium?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
                                   ),
                                 ),
-                                const SizedBox(width: AppSpacing.sm),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        review.clientName,
-                                        style: textTheme.labelLarge?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      Row(
-                                        children: [
-                                          ...List.generate(5, (i) {
-                                            return PhosphorIcon(
-                                              i < review.rating.floor()
-                                                  ? PhosphorIconsFill.star
-                                                  : PhosphorIconsRegular.star,
-                                              size: 12,
-                                              color: AppColors.secondary,
-                                            );
-                                          }),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            review.date,
-                                            style:
-                                                textTheme.bodySmall?.copyWith(
-                                              color: AppColors.textLight,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                      Text(review.clientName, style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                                      const SizedBox(height: 2),
+                                      Text(review.date, style: textTheme.labelSmall?.copyWith(color: AppColors.textLight)),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                                  child: Row(
+                                    children: [
+                                      Text(review.rating.toStringAsFixed(1), style: textTheme.labelMedium?.copyWith(color: AppColors.secondary, fontWeight: FontWeight.w800)),
+                                      const SizedBox(width: 4),
+                                      const PhosphorIcon(PhosphorIconsFill.star, size: 12, color: AppColors.secondary),
                                     ],
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: AppSpacing.sm),
+                            const SizedBox(height: AppSpacing.md),
                             Text(
                               review.comment,
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
+                              style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary, height: 1.5),
                             ),
                           ],
                         ),
@@ -495,113 +483,90 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
               ),
 
               // Bottom Padding for Action Bar
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 180),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
           ),
 
-          // Bottom Action Bar (Fixed)
+          // Bottom Action Bar (Fixed, Solid, Clean)
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
               decoration: BoxDecoration(
                 color: AppColors.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
+                border: const Border(top: BorderSide(color: AppColors.grey200)),
+                boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, -5))],
               ),
-              child: Row(
-                children: [
-                  // Message Button
-                  OutlinedButton.icon(
-                    onPressed: _isMessageLoading
-                        ? null
-                        : () async {
-                            try {
-                              setState(() => _isMessageLoading = true);
-                              final userData = await _authService.getUserData(
-                                  _authService.currentUser!.uid);
+              child: SafeArea(
+                child: Row(
+                  children: [
+                    // Message Button
+                    Expanded(
+                      flex: 2,
+                      child: OutlinedButton(
+                        onPressed: _isMessageLoading
+                            ? null
+                            : () async {
+                                try {
+                                  setState(() => _isMessageLoading = true);
+                                  final userData = await _authService.getUserData(_authService.currentUser!.uid);
+                                  final chat = await _chatService.getOrCreateChat(
+                                    clientId: _authService.currentUser!.uid,
+                                    clientName: userData?['fullName'] ?? 'Client',
+                                    clientAvatar: userData?['photoUrl'] ?? '',
+                                    lawyerId: lawyer.id,
+                                    lawyerName: lawyer.name,
+                                    lawyerAvatar: lawyer.photoUrl,
+                                  );
 
-                              final chat = await _chatService.getOrCreateChat(
-                                clientId: _authService.currentUser!.uid,
-                                clientName: userData?['fullName'] ?? 'Client',
-                                clientAvatar: userData?['photoUrl'] ?? '',
-                                lawyerId: lawyer.id,
-                                lawyerName: lawyer.name,
-                                lawyerAvatar: lawyer.photoUrl,
-                              );
-
-                              if (!context.mounted) return;
-                              context.push('/chat/${chat.id}', extra: {
-                                'lawyerId': lawyer.id,
-                                'lawyerName': lawyer.name,
-                                'lawyerAvatar': lawyer.photoUrl,
-                                'isOnline': true,
-                              });
-                            } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text('Error starting chat: $e')),
-                            );
-                            } finally {
-                              if (mounted) {
-                                setState(() => _isMessageLoading = false);
-                              }
-                            }
-                          },
-                    icon: _isMessageLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const PhosphorIcon(
-                            PhosphorIconsRegular.chatCircleText,
-                            size: 20,
-                          ),
-                    label: const Text('Message'),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: colorScheme.primary),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                        vertical: AppSpacing.md,
+                                  if (!context.mounted) return;
+                                  context.push('/chat/${chat.id}', extra: {
+                                    'lawyerId': lawyer.id,
+                                    'lawyerName': lawyer.name,
+                                    'lawyerAvatar': lawyer.photoUrl,
+                                    'isOnline': true,
+                                  });
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${loc.error} $e')));
+                                } finally {
+                                  if (mounted) setState(() => _isMessageLoading = false);
+                                }
+                              },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.grey300, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _isMessageLoading
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                            : const PhosphorIcon(PhosphorIconsRegular.chatCircleText, size: 24),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(width: AppSpacing.md),
-
-                  // Book Consultation Button
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        context.push('/booking/${lawyer.id}');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.secondary,
-                        foregroundColor: AppColors.textPrimary,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.md,
+                    const SizedBox(width: AppSpacing.md),
+                    // Book Consultation Button
+                    Expanded(
+                      flex: 5,
+                      child: FilledButton(
+                        onPressed: () => context.push('/booking/${lawyer.id}'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.secondary,
+                          foregroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
                         ),
-                      ),
-                      child: Text(
-                        'Book Consultation - PKR ${lawyer.pricePerConsultation}',
-                        style: textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
+                        child: Text(
+                          'Book Consult - PKR ${lawyer.pricePerConsultation}',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -611,53 +576,73 @@ class _LawyerProfileScreenState extends State<LawyerProfileScreen> {
   }
 }
 
-/// Quick Stat Card Widget
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  const _SectionTitle({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.w800,
+        color: AppColors.primary,
+        letterSpacing: -0.5,
+      ),
+    );
+  }
+}
+
 class _StatCard extends StatelessWidget {
   final PhosphorIconData icon;
   final String value;
   final String label;
 
-  const _StatCard({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
+  const _StatCard({required this.icon, required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(
-          color: AppColors.grey200,
-        ),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.grey200),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
-          PhosphorIcon(
-            icon,
-            size: 28,
-            color: AppColors.secondary,
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: PhosphorIcon(icon, size: 20, color: AppColors.secondary),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: 12),
           Text(
             value,
-            style: textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
               color: AppColors.primary,
             ),
           ),
+          const SizedBox(height: 2),
           Text(
             label,
-            style: textTheme.bodySmall?.copyWith(
+            style: theme.textTheme.labelSmall?.copyWith(
               color: AppColors.textSecondary,
-              fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

@@ -58,10 +58,12 @@ class ConsultationUtils {
 
   /// Check if consultation can be cancelled by user
   static bool canCancel(ConsultationModel consultation) {
-    return consultation.status != 'completed' &&
-        consultation.status != 'cancelled' &&
-        consultation.status != 'rejected' &&
-        consultation.status != 'no_show';
+    final status = consultation.status.toLowerCase();
+    return status != 'completed' &&
+        status != 'cancelled' &&
+        status != 'cancellation_requested' &&
+        status != 'rejected' &&
+        status != 'no_show';
   }
 
   /// Check if consultation can be accepted

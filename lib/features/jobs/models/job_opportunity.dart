@@ -6,31 +6,36 @@ class JobOpportunity {
   final String description;
   final String location;
   final String budgetLabel;
+  final double budgetMin;
+  final double budgetMax;
   final int proposalCount;
   final double clientRating;
   final String postedAgo;
   final String activity;
   final List<String> attachments;
-  final String clientId; // Added clientId
+  final String clientId;
   final String category;
+  final DateTime createdAt;
 
   const JobOpportunity({
     required this.id,
-    required this.clientId, // Required
+    required this.clientId,
     required this.title,
     required this.description,
     required this.location,
     required this.budgetLabel,
+    required this.budgetMin,
+    required this.budgetMax,
     required this.proposalCount,
     required this.clientRating,
     required this.postedAgo,
     required this.activity,
     required this.attachments,
     required this.category,
+    required this.createdAt,
   });
 
   factory JobOpportunity.fromCaseModel(CaseModel caseModel) {
-    // Calculate posted ago
     final now = DateTime.now();
     final difference = now.difference(caseModel.createdAt);
     String timeAgo;
@@ -45,7 +50,6 @@ class JobOpportunity {
       timeAgo = 'Just now';
     }
 
-    // Format budget
     String budget;
     if (caseModel.budgetMin == caseModel.budgetMax) {
       budget = 'Budget: ${caseModel.budgetMin.toInt()}';
@@ -56,17 +60,20 @@ class JobOpportunity {
 
     return JobOpportunity(
       id: caseModel.caseId,
-      clientId: caseModel.clientId, // Map clientId
+      clientId: caseModel.clientId,
       title: caseModel.title,
       description: caseModel.description,
       location: caseModel.city,
       budgetLabel: budget,
+      budgetMin: caseModel.budgetMin,
+      budgetMax: caseModel.budgetMax,
       proposalCount: caseModel.proposalCount,
-      clientRating: 0.0, // Placeholder, fetch if available
+      clientRating: 0.0,
       postedAgo: timeAgo,
       activity: '${caseModel.proposalCount} Proposals',
       attachments: caseModel.attachments.map((a) => a.title).toList(),
       category: caseModel.category,
+      createdAt: caseModel.createdAt,
     );
   }
 }

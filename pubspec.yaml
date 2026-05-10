@@ -10,6 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Localization
+  flutter_localizations:
+    sdk: flutter
+
   # UI & Icons
   cupertino_icons: ^1.0.6
   google_fonts: ^6.1.0
@@ -36,7 +40,7 @@ dependencies:
   shared_preferences: ^2.2.2
 
   # Utilities
-  intl: ^0.19.0
+  intl: ^0.20.2
   http: ^1.2.0
   uuid: ^4.3.3
   path_provider: ^2.1.2
@@ -64,6 +68,7 @@ dev_dependencies:
   flutter_native_splash: ^2.4.0
 
 flutter:
+  generate: true
   uses-material-design: true
 
   # Assets

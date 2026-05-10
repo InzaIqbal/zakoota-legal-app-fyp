@@ -48,6 +48,10 @@ class CaseModel {
   final String? acceptedLawyerId; // New field
   final double? agreedBudget; // Lawyer's agreed budget from accepted proposal
   final String? budgetSource; // 'client' or 'lawyer' - indicates which budget is active
+  final double? heldAmount; // Amount currently held in custody
+  final String? paymentStatus; // 'none', 'held', 'released'
+  final String? holdOperationId; // Wallet hold operation id for escrow
+  final String? releaseOperationId; // Wallet release operation id for escrow
   final String? workCompletionStatus; // null, 'lawyer_signalled', 'client_accepted', 'client_rejected'
   final DateTime? completedAt;
 
@@ -71,6 +75,10 @@ class CaseModel {
     this.acceptedLawyerId,
     this.agreedBudget,
     this.budgetSource,
+    this.heldAmount,
+    this.paymentStatus,
+    this.holdOperationId,
+    this.releaseOperationId,
     this.workCompletionStatus,
     this.completedAt,
   });
@@ -96,6 +104,10 @@ class CaseModel {
       'acceptedLawyerId': acceptedLawyerId,
       'agreedBudget': agreedBudget,
       'budgetSource': budgetSource,
+      'heldAmount': heldAmount,
+      'paymentStatus': paymentStatus,
+      'holdOperationId': holdOperationId,
+      'releaseOperationId': releaseOperationId,
       'workCompletionStatus': workCompletionStatus,
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
     };
@@ -125,6 +137,10 @@ class CaseModel {
       acceptedLawyerId: map['acceptedLawyerId'],
       agreedBudget: map['agreedBudget'] != null ? (map['agreedBudget'] as num).toDouble() : null,
       budgetSource: map['budgetSource'],
+      heldAmount: map['heldAmount'] != null ? (map['heldAmount'] as num).toDouble() : null,
+      paymentStatus: map['paymentStatus'],
+      holdOperationId: map['holdOperationId'] as String?,
+      releaseOperationId: map['releaseOperationId'] as String?,
       workCompletionStatus: map['workCompletionStatus'],
       completedAt: (map['completedAt'] as Timestamp?)?.toDate(),
     );
@@ -137,6 +153,10 @@ class CaseModel {
     String? acceptedLawyerId,
     double? agreedBudget,
     String? budgetSource,
+    double? heldAmount,
+    String? paymentStatus,
+    String? holdOperationId,
+    String? releaseOperationId,
   }) {
     return CaseModel(
       caseId: caseId,
@@ -158,6 +178,10 @@ class CaseModel {
       acceptedLawyerId: acceptedLawyerId ?? this.acceptedLawyerId,
       agreedBudget: agreedBudget ?? this.agreedBudget,
       budgetSource: budgetSource ?? this.budgetSource,
+      heldAmount: heldAmount ?? this.heldAmount,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      holdOperationId: holdOperationId ?? this.holdOperationId,
+      releaseOperationId: releaseOperationId ?? this.releaseOperationId,
       workCompletionStatus: workCompletionStatus ?? this.workCompletionStatus,
       completedAt: completedAt ?? this.completedAt,
     );

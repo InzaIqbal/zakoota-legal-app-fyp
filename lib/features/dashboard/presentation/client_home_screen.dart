@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
@@ -24,16 +25,16 @@ class ClientHomeScreen extends StatefulWidget {
 class _ClientHomeScreenState extends State<ClientHomeScreen> {
   final NotificationService _notificationService = NotificationService();
 
-  Future<void> _onRefresh() async {
+  Future<void> _onRefresh(AppLocalizations loc) async {
     // Simulate data refresh
     await Future.delayed(const Duration(seconds: 1));
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Dashboard refreshed'),
+        SnackBar(
+          content: Text(loc.dashboardRefreshed),
           backgroundColor: AppColors.success,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -41,259 +42,423 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: _buildAppBar(context),
+      backgroundColor: const Color(0xFFF1F4F8),
+      appBar: _buildAppBar(context, loc),
       body: RefreshIndicator(
-        onRefresh: _onRefresh,
+        onRefresh: () => _onRefresh(loc),
         color: AppColors.secondary,
         child: ListView(
-          padding: const EdgeInsets.symmetric(vertical: 20),
+          padding: const EdgeInsets.only(top: 16, bottom: 40),
           children: [
-            _buildPriorityEventStream(),
-            const SizedBox(height: 28),
+            _buildPriorityEventStream(loc),
+            const SizedBox(height: 24),
             _buildLegalServicesGrid(context),
-            const SizedBox(height: 28),
-            _buildActiveCasesStream(),
-            const SizedBox(height: 28),
-            _buildRecentUpdatesStream(),
-            const SizedBox(height: 40),
+            const SizedBox(height: 24),
+            _buildActiveCasesStream(loc),
+            const SizedBox(height: 24),
+            _buildRecentUpdatesStream(loc),
           ],
         ),
       ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return AppBar(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(color: Colors.grey.shade200, height: 1),
-      ),
-      leadingWidth: 64,
-      leading: Padding(
-        padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
-        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
-          stream: AuthService().getUserStream(),
-          builder: (context, snapshot) {
-            final userData = snapshot.data?.data();
-            final photoUrl = userData?['photoUrl'] as String? ??
-                'https://api.dicebear.com/7.x/avataaars/png?seed=ZakootaUser';
-            return CircleAvatar(
-              backgroundImage: NetworkImage(photoUrl),
-              backgroundColor: AppColors.grey200,
-            );
-          },
-        ),
-      ),
-      title: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
-        stream: AuthService().getUserStream(),
-        builder: (context, snapshot) {
-          final userData = snapshot.data?.data();
-          final displayName = userData?['fullName'] as String? ?? 'User';
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  PreferredSizeWidget _buildAppBar(BuildContext context, AppLocalizations loc) {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(kToolbarHeight + 82),
+      child: Container(
+        color: AppColors.primary,
+        child: SafeArea(
+          bottom: false,
+          child: Column(
             children: [
-              Text(
-                'Welcome back,',
-                style: textTheme.bodySmall?.copyWith(
-                  color: Colors.grey.shade600,
-                  fontSize: 11,
+              // Top bar row
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+                        stream: AuthService().getUserStream(),
+                        builder: (context, snapshot) {
+                          final userData = snapshot.data?.data();
+                          final photoUrl = userData?['photoUrl'] as String? ??
+                              'https://api.dicebear.com/7.x/avataaars/png?seed=ZakootaUser';
+                          final displayName = userData?['fullName'] as String? ?? 'User';
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundImage: NetworkImage(photoUrl),
+                                backgroundColor: AppColors.grey700,
+                              ),
+                              const SizedBox(width: 10),
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      loc.welcomeBackComma,
+                                      style: const TextStyle(
+                                        color: Colors.white60,
+                                        fontSize: 11,
+                                        fontFamily: 'Inter',
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      displayName,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                    const Spacer(),
+                    // Wallet chip
+                    StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+                      stream: AuthService().getUserStream(),
+                      builder: (context, snapshot) {
+                        final walletBalance =
+                            (snapshot.data?.data()?['walletBalance'] as num?)?.toInt() ?? 0;
+                        return GestureDetector(
+                          onTap: () => context.push('/wallet'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white24),
+                            ),
+                            child: Row(
+                              children: [
+                                PhosphorIcon(PhosphorIconsRegular.wallet,
+                                    color: AppColors.secondary, size: 14),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'PKR $walletBalance',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'Inter',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    // Notification bell
+                    StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+                      stream: AuthService().getUserStream(),
+                      builder: (context, userSnapshot) {
+                        final userId = userSnapshot.data?.id;
+                        if (userId == null) return const SizedBox.shrink();
+                        return StreamBuilder<int>(
+                          stream: _notificationService.streamUnreadCount(userId),
+                          builder: (context, unreadSnapshot) {
+                            final unreadCount = unreadSnapshot.data ?? 0;
+                            return Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                IconButton(
+                                  icon: PhosphorIcon(PhosphorIconsRegular.bell,
+                                      color: Colors.white, size: 22),
+                                  onPressed: () => context.push('/notifications'),
+                                ),
+                                if (unreadCount > 0)
+                                  Positioned(
+                                    right: 6,
+                                    top: 6,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(3),
+                                      decoration: const BoxDecoration(
+                                          color: AppColors.error,
+                                          shape: BoxShape.circle),
+                                      child: Text(
+                                        unreadCount > 99
+                                            ? '99+'
+                                            : unreadCount.toString(),
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.w700),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                displayName,
-                style: textTheme.titleMedium?.copyWith(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
+              // Bottom stats strip
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+                  stream: AuthService().getUserStream(),
+                  builder: (context, snapshot) {
+                    final userId = snapshot.data?.id ?? '';
+                    return StreamBuilder<List<CaseModel>>(
+                      stream: userId.isEmpty
+                          ? const Stream.empty()
+                          : CaseService().getCasesForClient(userId),
+                      builder: (context, caseSnap) {
+                        final cases = caseSnap.data ?? [];
+                        final active = cases
+                            .where((c) => c.status == 'active')
+                            .length;
+                        final pending = cases
+                            .where((c) => c.status == 'open')
+                            .length;
+                        final total = cases.length;
+                        return Row(
+                          children: [
+                            _buildStatItem(active.toString(), 'Active Cases',
+                                PhosphorIconsRegular.briefcase),
+                            _buildStatDivider(),
+                            _buildStatItem(total.toString(), 'Total Cases',
+                                PhosphorIconsRegular.folder),
+                            _buildStatDivider(),
+                            _buildStatItem(pending.toString(), 'Pending Bids',
+                                PhosphorIconsRegular.scales),
+                          ],
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
             ],
-          );
-        },
-      ),
-      actions: [
-        GestureDetector(
-          onTap: () {
-            context.push('/wallet');
-          },
-          child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
-            stream: AuthService().getUserStream(),
-            builder: (context, snapshot) {
-              final userData = snapshot.data?.data();
-              final walletBalance =
-                  (userData?['walletBalance'] as num?)?.toInt() ?? 0;
-
-              return Container(
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Row(
-                  children: [
-                    PhosphorIcon(
-                      PhosphorIconsRegular.wallet,
-                      color: colorScheme.primary,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'PKR $walletBalance',
-                      style: textTheme.labelMedium?.copyWith(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
           ),
         ),
-        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
-          stream: AuthService().getUserStream(),
-          builder: (context, userSnapshot) {
-            final userId = userSnapshot.data?.id;
-            if (userId == null) return const SizedBox.shrink();
-
-            return StreamBuilder<int>(
-              stream: _notificationService.streamUnreadCount(userId),
-              builder: (context, unreadSnapshot) {
-                final unreadCount = unreadSnapshot.data ?? 0;
-                return Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    IconButton(
-                      icon: PhosphorIcon(
-                        PhosphorIconsRegular.bell,
-                        color: Colors.black87,
-                      ),
-                      onPressed: () => context.push('/notifications'),
-                    ),
-                    if (unreadCount > 0)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: AppColors.error,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            unreadCount > 99 ? '99+' : unreadCount.toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            );
-          },
-        ),
-        const SizedBox(width: 8),
-      ],
+      ),
     );
   }
 
-  Widget _buildPriorityEventStream() {
+  Widget _buildStatItem(String value, String label, PhosphorIconData icon) {
+    return Expanded(
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PhosphorIcon(icon, color: AppColors.secondary, size: 13),
+            const SizedBox(width: 5),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 9,
+                    fontFamily: 'Inter',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatDivider() {
+    return Container(
+        width: 1, height: 28, color: Colors.white12);
+  }
+
+  Widget _buildPriorityEventStream(AppLocalizations loc) {
     final userId = AuthService().currentUser?.uid;
     if (userId == null) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
-            "Today's Agenda",
-            style: TextStyle(
-              fontSize: 16,
+            loc.todaysAgenda,
+            style: const TextStyle(
+              fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: Colors.black87,
+              color: AppColors.textPrimary,
+              fontFamily: 'Poppins',
             ),
           ),
         ),
         const SizedBox(height: 12),
-        StreamBuilder<EventModel?>(
-          stream: EventService().getNextUpcomingEvent(userId),
-          builder: (context, eventSnapshot) {
-            if (eventSnapshot.hasError) {
-              return _buildPriorityEventCard(null); // Fallback if no index or offline
-            }
-            if (eventSnapshot.connectionState == ConnectionState.waiting) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(
-                  height: 100, 
-                  child: Center(child: CircularProgressIndicator())
-                ),
+        StreamBuilder<List<EventModel>>(
+          stream: EventService().streamUserEvents(userId),
+          builder: (context, eventsSnap) {
+            if (eventsSnap.hasError) return _buildPriorityEventCard(null, loc);
+            if (eventsSnap.connectionState == ConnectionState.waiting) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _buildPriorityEventCard(null, loc),
               );
             }
-            final event = eventSnapshot.data;
-            return _buildPriorityEventCard(event);
+
+            final events = eventsSnap.data ?? [];
+            if (events.isEmpty) return _buildPriorityEventCard(null, loc);
+
+            final now = DateTime.now();
+            final startOfToday = DateTime(now.year, now.month, now.day);
+            final endOfToday = startOfToday.add(const Duration(days: 1));
+
+            // Group events strictly by workspace caseId (only events tied to a case workspace)
+            final Map<String, List<EventModel>> eventsByCase = {};
+            for (var e in events) {
+              if (e.caseId != null && e.caseId!.isNotEmpty) {
+                eventsByCase.putIfAbsent(e.caseId!, () => []).add(e);
+              }
+            }
+
+            // If no case-linked events exist, fall back to grouping by referenceId
+            if (eventsByCase.isEmpty) {
+              for (var e in events) {
+                final key = e.referenceId.isNotEmpty ? e.referenceId : 'no_case_${e.id}';
+                eventsByCase.putIfAbsent(key, () => []).add(e);
+              }
+            }
+
+            // For each case, pick nearest today's event; if none, pick nearest future event.
+            final List<EventModel> nearestPerCase = [];
+            for (var entry in eventsByCase.entries) {
+              final list = entry.value..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+              final todays = list.where((ev) => !ev.scheduledAt.isBefore(startOfToday) && ev.scheduledAt.isBefore(endOfToday)).toList();
+              if (todays.isNotEmpty) {
+                nearestPerCase.add(todays.first);
+              } else {
+                final future = list.where((ev) => !ev.scheduledAt.isBefore(now)).toList();
+                if (future.isNotEmpty) nearestPerCase.add(future.first);
+              }
+            }
+
+            if (nearestPerCase.isEmpty) return _buildPriorityEventCard(null, loc);
+
+            nearestPerCase.sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+
+            // Render one card per case (nearest event for that case)
+            return Column(
+              children: nearestPerCase
+                  .map((e) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildPriorityEventCard(e, loc),
+                      ))
+                  .toList(),
+            );
           },
         ),
       ],
     );
   }
 
-  Widget _buildPriorityEventCard(EventModel? event) {
+  Widget _buildPriorityEventCard(EventModel? event, AppLocalizations loc) {
     if (event == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.grey200),
           ),
-          color: Colors.white,
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              backgroundColor: AppColors.success.withOpacity(0.1),
-              radius: 24,
-              child: PhosphorIcon(PhosphorIconsRegular.coffee,
-                  color: AppColors.success),
-            ),
-            title: const Text('All caught up!',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                  'You have no urgent events or hearings today. Enjoy your day.',
-                  style:
-                      TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-            ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: PhosphorIcon(PhosphorIconsRegular.coffee,
+                    color: AppColors.success, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(loc.allCaughtUp,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: AppColors.textPrimary,
+                            fontFamily: 'Inter'),
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 3),
+                    Text(loc.noUrgentEventsToday,
+                        style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontFamily: 'Inter'),
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
+    // Defensive logging to help diagnose missing/empty event fields at runtime.
+    try {
+      // ignore: avoid_print
+      print('Rendering event card: id=${event.id} title="${event.title}" scheduledAt=${event.scheduledAt.toIso8601String()} caseId=${event.caseId}');
+    } catch (_) {}
 
     final dateFormat = DateFormat('MMM d, h:mm a');
-    final formattedDate = dateFormat.format(event.scheduledAt);
+    String formattedDate;
+    try {
+      formattedDate = dateFormat.format(event.scheduledAt);
+    } catch (_) {
+      formattedDate = '';
+    }
     final eventKind = event.type == 'consultation'
-      ? 'Consultation'
+      ? loc.consultationEvent
       : event.type == 'hearing'
-        ? 'Hearing'
-        : 'Workspace Event';
+        ? loc.hearingEvent
+        : loc.workspaceEvent;
     final eventLocation = (event.location != null && event.location!.isNotEmpty)
       ? event.location!
       : event.subtitle;
@@ -301,57 +466,99 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Card(
-        elevation: 0,
-        color: AppColors.primary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.grey200),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: Container(width: 4, color: AppColors.secondary),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: AppColors.primary.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       eventKind,
                       style: const TextStyle(
-                          color: Colors.white,
+                          color: AppColors.primary,
                           fontWeight: FontWeight.w600,
-                          fontSize: 12),
+                          fontSize: 11,
+                          fontFamily: 'Inter'),
                     ),
                   ),
                   PhosphorIcon(
                     event.type == 'consultation'
                         ? PhosphorIconsRegular.users
                         : PhosphorIconsRegular.gavel,
-                    color: Colors.white70,
-                    size: 24,
+                    color: AppColors.textSecondary,
+                    size: 20,
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Text(event.title,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(eventLocation,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
-              const SizedBox(height: 2),
+              const SizedBox(height: 10),
               Text(
-                formattedDate,
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                (event.title.trim().isEmpty) ? 'Untitled Event' : event.title,
+                  style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Poppins'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  PhosphorIcon(PhosphorIconsRegular.mapPin,
+                      color: AppColors.textSecondary, size: 12),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(eventLocation,
+                        style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontFamily: 'Inter'),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  PhosphorIcon(PhosphorIconsRegular.clock,
+                      color: AppColors.textSecondary, size: 12),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(formattedDate,
+                        style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontFamily: 'Inter'),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -361,16 +568,22 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                             '/case-workspace?caseId=$caseId&isClient=true&tab=events',
                           ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.primary,
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Inter'),
                   ),
-                  child: const Text('View Details',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  child: Text(loc.viewDetails),
                 ),
+              ),
+            ],
+          ),
               ),
             ],
           ),
@@ -401,20 +614,24 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           child: Text(
             'Legal Services',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: Colors.black87,
+              color: AppColors.textPrimary,
+              fontFamily: 'Poppins',
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: ClientHomeData.services
-                .map((service) => _buildServiceItem(context, service))
+                .map((service) => Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: _buildServiceItem(context, service),
+                      ),
+                    ))
                 .toList(),
           ),
         ),
@@ -425,30 +642,36 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   Widget _buildServiceItem(BuildContext context, ServiceData service) {
     return GestureDetector(
       onTap: () => context.push(service.route),
-      child: SizedBox(
-        width: 76,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.grey200),
+        ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey.shade300),
+                color: AppColors.primary.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: PhosphorIcon(service.icon,
-                  color: AppColors.primary, size: 28),
+                  color: AppColors.primary, size: 22),
             ),
+            const SizedBox(height: 8),
             Text(
               service.name,
               textAlign: TextAlign.center,
               maxLines: 2,
               style: const TextStyle(
-                fontSize: 12,
-                color: Colors.black87,
-                fontWeight: FontWeight.w500,
-                height: 1.2,
+                fontSize: 11,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Inter',
+                height: 1.3,
               ),
             ),
           ],
@@ -457,7 +680,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     );
   }
 
-  Widget _buildActiveCasesStream() {
+  Widget _buildActiveCasesStream(AppLocalizations loc) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
       stream: AuthService().getUserStream(),
       builder: (context, userSnapshot) {
@@ -473,9 +696,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                   child: Center(child: CircularProgressIndicator()));
             }
             if (snapshot.hasError) {
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Error loading cases'),
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: const Text('Error loading cases'),
               );
             }
 
@@ -491,18 +714,19 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Active Cases',
-                        style: TextStyle(
-                          fontSize: 16,
+                      Text(
+                        loc.activeCases,
+                        style: const TextStyle(
+                          fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: Colors.black87,
+                          color: AppColors.textPrimary,
+                          fontFamily: 'Poppins',
                         ),
                       ),
                       GestureDetector(
                         onTap: () => context.go('/client-cases'),
                         child: Text(
-                          'View All',
+                          loc.viewAll,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -515,7 +739,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 if (activeCases.isEmpty)
-                  _buildEmptyActiveCasesState(context)
+                  _buildEmptyActiveCasesState(context, loc)
                 else
                   SizedBox(
                     height: 180,
@@ -536,51 +760,65 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     );
   }
 
-  Widget _buildEmptyActiveCasesState(BuildContext context) {
+  Widget _buildEmptyActiveCasesState(BuildContext context, AppLocalizations loc) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.grey200),
         ),
-        color: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: AppColors.primary.withOpacity(0.1),
-                radius: 24,
-                child: PhosphorIcon(PhosphorIconsRegular.briefcase,
-                    color: AppColors.primary),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('No active cases',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 15)),
-                    const SizedBox(height: 4),
-                    Text('Post a new case to get started.',
-                        style: TextStyle(
-                            color: Colors.grey.shade600, fontSize: 13)),
-                  ],
-                ),
+              child: PhosphorIcon(PhosphorIconsRegular.briefcase,
+                  color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(loc.noActiveCases,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                          fontFamily: 'Inter')),
+                  const SizedBox(height: 3),
+                  Text(loc.postNewCaseToGetStarted,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          fontFamily: 'Inter')),
+                ],
               ),
-              TextButton(
-                onPressed: () => context.push('/post-case'),
-                style: TextButton.styleFrom(
-                  backgroundColor: AppColors.primary.withOpacity(0.1),
-                  foregroundColor: AppColors.primary,
-                ),
-                child: const Text('Post Case'),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () => context.push('/post-case'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Inter'),
               ),
-            ],
-          ),
+              child: Text(loc.postACase),
+            ),
+          ],
         ),
       ),
     );
@@ -618,20 +856,21 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
   Widget _buildActiveCaseCard(BuildContext context, CaseModel caseModel) {
     final statusColor = _getStatusColor(caseModel.status);
+    final loc = AppLocalizations.of(context);
 
     return InkWell(
       onTap: () => context.push('/case-ad-details', extra: caseModel),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        width: 260,
+        width: 240,
         margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.grey200),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -640,14 +879,15 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                 children: [
                   Text(
                     '#${caseModel.caseId.substring(0, (caseModel.caseId.length > 8 ? 8 : caseModel.caseId.length)).toUpperCase()}',
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
-                      fontSize: 12,
+                      fontSize: 11,
+                      fontFamily: 'Inter',
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
                       color: statusColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(4),
@@ -657,26 +897,28 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       style: TextStyle(
                         color: statusColor,
                         fontWeight: FontWeight.w700,
-                        fontSize: 10,
+                        fontSize: 9,
+                        fontFamily: 'Inter',
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Text(
-                caseModel.title.isNotEmpty ? caseModel.title : 'Untitled Case',
+                caseModel.title.isNotEmpty ? caseModel.title : loc.untitledCase,
                 style: const TextStyle(
-                  color: Colors.black87,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w600,
-                  fontSize: 15,
+                  fontSize: 14,
+                  fontFamily: 'Poppins',
                   height: 1.3,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
               const Spacer(),
-              const Divider(height: 24),
+              Divider(height: 20, color: AppColors.grey200),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -684,18 +926,29 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                     Text(
                       'Rs. ${caseModel.budgetMin.toStringAsFixed(0)}',
                       style: const TextStyle(
-                        color: Colors.black87,
+                        color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
-                        fontSize: 13,
+                        fontSize: 12,
+                        fontFamily: 'Inter',
                       ),
-                    ),
-                  const Text(
-                    'View Details',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
+                    )
+                  else
+                    const SizedBox.shrink(),
+                  Row(
+                    children: [
+                      Text(
+                        loc.viewDetails,
+                        style: const TextStyle(
+                          color: AppColors.secondary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                          fontFamily: 'Inter',
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(Icons.arrow_forward_ios,
+                          size: 10, color: AppColors.secondary),
+                    ],
                   ),
                 ],
               ),
@@ -706,7 +959,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     );
   }
 
-  Widget _buildRecentUpdatesStream() {
+  Widget _buildRecentUpdatesStream(AppLocalizations loc) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
       stream: AuthService().getUserStream(),
       builder: (context, userSnapshot) {
@@ -728,14 +981,15 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
-                    'Recent Updates',
-                    style: TextStyle(
-                      fontSize: 16,
+                    loc.recentUpdates,
+                    style: const TextStyle(
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: Colors.black87,
+                      color: AppColors.textPrimary,
+                      fontFamily: 'Poppins',
                     ),
                   ),
                 ),
@@ -745,59 +999,66 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Center(
                       child: Text(
-                        'No recent updates yet',
+                        loc.noRecentUpdatesYet,
                         style: TextStyle(color: Colors.grey.shade500),
                       ),
                     ),
                   )
                 else
-                  Card(
-                    elevation: 0,
+                  Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
-                    shape: RoundedRectangleBorder(
-                      side: BorderSide(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.grey200),
                     ),
-                    color: Colors.white,
                     child: ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: updates.length,
                       separatorBuilder: (context, index) =>
-                          Divider(height: 1, color: Colors.grey.shade200),
+                          Divider(height: 1, color: AppColors.grey100),
                       itemBuilder: (context, index) {
                         final update = updates[index];
                         return ListTile(
                           onTap: () => _handleUpdateTap(context, update),
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 4),
-                          leading: CircleAvatar(
-                            backgroundColor:
-                                _getUpdateColor(update.colorType).withOpacity(0.1),
+                              horizontal: 14, vertical: 4),
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: _getUpdateColor(update.colorType).withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                             child: PhosphorIcon(
                               _getUpdateIcon(update.iconType),
                               color: _getUpdateColor(update.colorType),
-                              size: 20,
+                              size: 18,
                             ),
                           ),
                           title: Text(
                             update.title,
                             style: const TextStyle(
-                                fontSize: 14,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.black87),
+                                color: AppColors.textPrimary,
+                                fontFamily: 'Inter'),
                           ),
                           subtitle: Text(
                             update.message,
-                            style: TextStyle(
-                                fontSize: 13, color: Colors.grey.shade600),
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                                fontFamily: 'Inter'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           trailing: Text(
                             _formatTime(update.timestamp),
-                            style: TextStyle(
-                                fontSize: 11, color: Colors.grey.shade500),
+                            style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontFamily: 'Inter'),
                           ),
                         );
                       },

@@ -28,12 +28,31 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
   late bool _isAdVisible;
   late List<CaseAttachment> _attachments;
   bool _isLoading = false;
+  late int _viewsCount;
+  bool _hasIncrementedViews = false;
 
   @override
   void initState() {
     super.initState();
     _isAdVisible = widget.caseModel.isAdVisible;
     _attachments = List.from(widget.caseModel.attachments);
+    _viewsCount = widget.caseModel.viewsCount;
+    _incrementViewsOnce();
+  }
+
+  Future<void> _incrementViewsOnce() async {
+    if (_hasIncrementedViews) return;
+    _hasIncrementedViews = true;
+
+    try {
+      await CaseService().incrementViewCount(widget.caseModel.caseId);
+      if (!mounted) return;
+      setState(() {
+        _viewsCount += 1;
+      });
+    } catch (_) {
+      // Keep the screen usable even if the analytics update fails.
+    }
   }
 
   @override
@@ -193,7 +212,7 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
             children: [
               _AnalyticsCard(
                 label: 'Views',
-                value: widget.caseModel.viewsCount.toString(),
+                value: _viewsCount.toString(),
                 icon: PhosphorIconsRegular.eye,
                 color: Colors.blue,
               ),
@@ -204,17 +223,10 @@ class _ClientCaseAdDetailsScreenState extends State<ClientCaseAdDetailsScreen> {
                 icon: PhosphorIconsRegular.paperPlaneRight,
                 color: Colors.orange,
               ),
-              const SizedBox(width: AppSpacing.md),
-              _AnalyticsCard(
-                label: 'Saves',
-                value: widget.caseModel.savesCount.toString(),
-                icon: PhosphorIconsRegular.bookmarkSimple,
-                color: Colors.purple,
-              ),
             ],
           ),
           // Insight Tip
-          if (widget.caseModel.viewsCount > 10 &&
+          if (_viewsCount > 10 &&
               widget.caseModel.proposalCount == 0)
             Container(
               margin: const EdgeInsets.only(top: AppSpacing.md),

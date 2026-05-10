@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:zakoota/l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
 
@@ -43,10 +44,11 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
         }
       } catch (e) {
         if (mounted) {
+          final loc = AppLocalizations.of(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                  'Sign Up Failed: ${e.toString().replaceAll("Exception:", "")}'),
+                  '${loc.signUpFailedPrefix} ${e.toString().replaceAll("Exception:", "")}'),
               backgroundColor: AppColors.error,
             ),
           );
@@ -65,17 +67,17 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
 
       final status = result['status'];
       final role = result['role'];
+      final loc = AppLocalizations.of(context);
 
       if (status == 'cancelled') return;
 
       // Smart Redirection Check
       if (role != null && role != 'lawyer') {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('This account is a Client account. Redirecting you...'),
+          SnackBar(
+            content: Text(loc.clientAccountRedirecting),
             backgroundColor: AppColors.secondary,
-            duration: Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -93,10 +95,11 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final loc = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Google Sign-In Failed: ${e.toString().replaceAll("Exception:", "")}'),
+                '${loc.googleSignInFailedPrefix} ${e.toString().replaceAll("Exception:", "")}'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -108,6 +111,7 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -148,7 +152,7 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
 
                 // Header
                 Text(
-                  'Lawyer Registration',
+                  loc.lawyerRegistration,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary,
@@ -157,7 +161,7 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Create your professional account to start accepting cases.',
+                  loc.lawyerRegistrationDescription,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -168,14 +172,14 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
                 // Full Name
                 TextFormField(
                   controller: _fullNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full Name',
-                    hintText: 'e.g. John Doe',
-                    prefixIcon: Icon(Icons.person_outline),
+                  decoration: InputDecoration(
+                    labelText: loc.fullNameLabel,
+                    hintText: loc.exampleName,
+                    prefixIcon: const Icon(Icons.person_outline),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter your full name';
+                      return loc.pleaseEnterYourFullName;
                     }
                     return null;
                   },
@@ -186,17 +190,17 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'name@example.com',
-                    prefixIcon: Icon(Icons.email_outlined),
+                  decoration: InputDecoration(
+                    labelText: loc.emailLabel,
+                    hintText: loc.exampleEmail,
+                    prefixIcon: const Icon(Icons.email_outlined),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
+                      return loc.pleaseEnterYourEmailAddress;
                     }
                     if (!value.contains('@')) {
-                      return 'Please enter a valid email';
+                      return loc.pleaseEnterValidEmail;
                     }
                     return null;
                   },
@@ -208,8 +212,8 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
-                    labelText: 'Password',
-                    hintText: '••••••••',
+                    labelText: loc.passwordLabel,
+                    hintText: loc.passwordHint,
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -226,10 +230,10 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter a password';
+                      return loc.pleaseEnterPassword;
                     }
                     if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
+                      return loc.passwordMinLength(6);
                     }
                     return null;
                   },
@@ -258,9 +262,9 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
                                   AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
-                        : const Text(
-                            'Create Account',
-                            style: TextStyle(
+                        : Text(
+                            loc.createAccountButton,
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
@@ -277,9 +281,9 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
                     color: Colors.red,
                     size: 24,
                   ),
-                  label: const Text(
-                    'Continue with Google',
-                    style: TextStyle(
+                  label: Text(
+                    loc.continueWithGoogle,
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary,
@@ -300,16 +304,16 @@ class _LawyerSignUpScreenState extends State<LawyerSignUpScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      'Already have an account? ',
+                      '${loc.alreadyHaveAccountQuestion} ',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: AppColors.textSecondary,
                           ),
                     ),
                     TextButton(
                       onPressed: () => context.go('/login?role=lawyer'),
-                      child: const Text(
-                        'Log In',
-                        style: TextStyle(
+                      child: Text(
+                        loc.logIn,
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           color: AppColors.primary,
                         ),

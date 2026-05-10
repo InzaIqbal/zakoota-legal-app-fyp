@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/auth_service.dart';
 import '../models/job_opportunity.dart';
@@ -34,6 +35,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   final _durationController = TextEditingController();
   final _coverLetterController = TextEditingController();
 
+  AppLocalizations get loc => AppLocalizations.of(context);
+
   @override
   void initState() {
     super.initState();
@@ -55,7 +58,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please login to submit a proposal')),
+        SnackBar(content: Text(loc.pleaseLoginToSubmitProposal)),
       );
       return;
     }
@@ -64,7 +67,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
         _durationController.text.isEmpty ||
         _coverLetterController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all fields')),
+        SnackBar(content: Text(loc.pleaseFillAllFields)),
       );
       return;
     }
@@ -76,11 +79,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       final lawyerData = await _authService.getUserData(user.uid);
       if (!mounted) return;
       
-      final lawyerName = lawyerData?['fullName'] ?? 'Lawyer';
+      final lawyerName = lawyerData?['fullName'] ?? loc.lawyer;
       final lawyerImage = lawyerData?['photoUrl'] ??
           'https://api.dicebear.com/7.x/avataaars/png?seed=${user.uid}';
       final rating = (lawyerData?['rating'] ?? 0.0).toDouble();
-      final city = lawyerData?['city'] ?? 'Unknown';
+      final city = lawyerData?['city'] ?? loc.unknown;
 
       await _proposalService.submitProposal(
         caseId: widget.job.id,
@@ -98,7 +101,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Proposal Submitted Successfully!')),
+          SnackBar(content: Text(loc.proposalSubmittedSuccessfully)),
         );
         // Clear form
         _bidController.clear();
@@ -110,7 +113,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('${loc.error}: $e')),
         );
       }
     } finally {
@@ -129,18 +132,19 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Job Details'),
+        title: Text(loc.jobDetails),
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.primary,
-          tabs: const [
-            Tab(text: 'Details'),
-            Tab(text: 'Proposals'),
+          tabs: [
+            Tab(text: loc.details),
+            Tab(text: loc.proposals),
           ],
         ),
       ),
@@ -151,7 +155,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
+              return Center(child: Text('${loc.error}: ${snapshot.error}'));
             }
 
             final proposals = snapshot.data ?? [];
@@ -222,8 +226,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'About the Client',
+                  Text(
+                    loc.aboutTheClient,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
@@ -254,10 +258,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                               fontSize: 14,
                             ),
                           ),
-                          Text(
-                            _clientData?['createdAt'] != null
-                                ? 'Joined ${DateFormat.yMMMd().format((_clientData!['createdAt'] as Timestamp).toDate())}'
-                                : 'Member since 2024',
+                                  Text(
+                                    _clientData?['createdAt'] != null
+                                        ? loc.joined(DateFormat.yMMMd().format((_clientData!['createdAt'] as Timestamp).toDate()))
+                                        : loc.memberSince2024,
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondary,
@@ -273,8 +277,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           const SizedBox(height: AppSpacing.lg),
 
           // Description
-          const Text(
-            'Job Description',
+          Text(
+            loc.jobDescription,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -294,8 +298,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
 
           // Attachments
           if (widget.job.attachments.isNotEmpty) ...[
-            const Text(
-              'Attachments',
+            Text(
+              loc.attachments,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -337,21 +341,20 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
               ),
               child: Column(
                 children: [
-                  const Row(
+                    Row(
                     children: [
                       Icon(Icons.check_circle, color: AppColors.success),
                       SizedBox(width: 8),
-                      Text('Proposal Submitted',
+                      Text(loc.proposalSubmitted,
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: AppColors.success)),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                      'You have already submitted a proposal for this job. You can edit it below.',
-                      style: TextStyle(
-                          color: AppColors.textSecondary, fontSize: 13)),
+                    Text(loc.proposalAlreadySubmitted,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 13)),
                   const SizedBox(height: 16),
                   ProposalCard(
                     proposal: myProposal,
@@ -363,8 +366,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
               ),
             )
           ] else ...[
-            const Text(
-              'Submit a Proposal',
+            Text(
+              loc.submitAProposal,
               style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -376,8 +379,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                 Expanded(
                   child: _buildTextField(
                     controller: _bidController,
-                    label: 'Bid Amount (PKR)',
-                    hint: 'e.g. 50000',
+                    label: loc.bidAmountPkr,
+                    hint: loc.example50000,
                     keyboardType: TextInputType.number,
                   ),
                 ),
@@ -385,8 +388,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                 Expanded(
                   child: _buildTextField(
                     controller: _durationController,
-                    label: 'Duration',
-                    hint: 'e.g. 7 Days',
+                    label: loc.duration,
+                    hint: loc.example7Days,
                   ),
                 ),
               ],
@@ -394,8 +397,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             const SizedBox(height: AppSpacing.md),
             _buildTextField(
               controller: _coverLetterController,
-              label: 'Cover Letter',
-              hint: 'Describe why you are the best fit for this job...',
+              label: loc.coverLetter,
+              hint: loc.describeWhyYouAreBestFit,
               maxLines: 4,
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -417,7 +420,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                         height: 20,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
-                    : const Text('Submit Proposal',
+                    : Text(loc.submitProposal,
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold)),
               ),
@@ -485,8 +488,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             Icon(Icons.description_outlined,
                 size: 48, color: AppColors.grey300),
             const SizedBox(height: 16),
-            const Text(
-              'No proposals yet',
+              Text(
+                loc.noProposalsYet,
               style: TextStyle(
                 fontSize: 16,
                 color: AppColors.textSecondary,
@@ -494,8 +497,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Be the first to submit a proposal!',
+            Text(
+              loc.beTheFirstToSubmit,
               style: TextStyle(
                 fontSize: 14,
                 color: AppColors.textLight,
@@ -527,17 +530,16 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Proposal?'),
-        content: const Text(
-            'Are you sure you want to delete this proposal? This action cannot be undone.'),
+        title: Text(loc.deleteProposal),
+        content: Text(loc.deleteProposalConfirm),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+              child: Text(loc.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
+            child: Text(loc.delete),
           ),
         ],
       ),
@@ -549,12 +551,12 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
         if (!mounted) return;
         if (mounted) {
           ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('Proposal deleted')));
+              .showSnackBar(SnackBar(content: Text(loc.proposalDeleted)));
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('Error: $e')));
+              .showSnackBar(SnackBar(content: Text('${loc.error}: $e')));
         }
       }
     }
@@ -569,7 +571,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Edit Proposal'),
+        title: Text(loc.editProposal),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -594,9 +596,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           ),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(loc.cancel)),
           ElevatedButton(
               onPressed: () async {
                 try {
@@ -610,16 +612,16 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                   if (context.mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Proposal updated')));
+                          SnackBar(content: Text(loc.proposalUpdated)));
                   }
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text('Error: $e')));
+                          .showSnackBar(SnackBar(content: Text('${loc.error}: $e')));
                   }
                 }
               },
-              child: const Text('Save Changes')),
+                child: Text(loc.saveChanges)),
         ],
       ),
     );
