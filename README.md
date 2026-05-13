@@ -4,6 +4,8 @@
 > Department of Computer Science, University of Engineering and Technology, Lahore — Narowal Campus  
 > Session: 2022–2026 | Submitted: May 2026
 
+**Zakoota** is a cross-platform mobile application that connects clients with verified lawyers across Pakistan — making legal help as easy as booking a ride. Built with Flutter and powered by Firebase, it offers a transparent marketplace where clients can discover, compare, and hire qualified lawyers by specialization, read legal articles, manage their cases, and get instant AI-powered legal guidance through **Zing AI** — all from one app. Lawyers get a dedicated workspace to manage bookings, advertise services, communicate with clients, and track case progress. Whether you're in Lahore or a small town, Zakoota brings professional legal services to your fingertips.
+
 ---
 
 ## 👥 Team
